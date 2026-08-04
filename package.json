@@ -1,0 +1,29 @@
+{
+  "name": "print-job-manager",
+  "version": "1.0.0",
+  "description": "A managing app that allows planning of 3d printing jobs based on projects and a prioritised list of models",
+  "main": "index.js",
+  "directories": {
+    "doc": "docs"
+  },
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/chof747/print-job-manager.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs",
+  "bugs": {
+    "url": "https://github.com/chof747/print-job-manager/issues"
+  },
+  "homepage": "https://github.com/chof747/print-job-manager#readme",
+  "devDependencies": {
+    "@ai-hero/sandcastle": "^0.12.0",
+    "tsx": "^4.23.5",
+    "typescript": "^7.0.2"
+  }
+}
