@@ -232,6 +232,6 @@ The following details were intentionally deferred:
 - retention and deletion policy, including whether users may delete historical jobs
 - parser support matrix and behavior for malformed or contradictory metadata
 - execution handoff, idempotency, and printer-offline behavior
-- definition of material compatibility and inventory availability
+- definition of material compatibility
 
 These questions should be resolved one at a time during epic refinement and recorded here or in a new ADR when the decision is significant and hard to reverse.

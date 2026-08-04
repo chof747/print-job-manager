@@ -59,7 +59,7 @@ Owns printer identity, capabilities, availability, and operational state. It rep
 
 Owns available material resources. Jobs state material attributes and estimated usage, not a permanent reference to one specific spool.
 
-The precise point at which inventory is checked or allocated remains open.
+Inventory availability is checked as part of eligibility, and a concrete material resource is reserved when the scheduler creates an assignment.
 
 ### Scheduler
 
@@ -188,6 +188,5 @@ These extensions should plug into stable domain interfaces rather than enlarge t
 - define assignment persistence and cancellation behavior
 - define default scheduling algorithm
 - define compatibility rule model
-- define inventory availability and allocation timing
 - define integration error handling and reconciliation
 - define event, polling, or hybrid update model for printer state

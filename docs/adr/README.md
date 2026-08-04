@@ -28,6 +28,7 @@ ADRs capture decisions that materially shape the system and would be costly or c
 | [0011](0011-failed-jobs-require-user-action.md) | Failed jobs do not retry automatically | Accepted |
 | [0012](0012-immutable-execution-mutable-scheduling.md) | Execution data is immutable after queueing; scheduling data remains mutable | Accepted |
 | [0013](0013-use-numeric-job-priority.md) | Job priority is numeric | Accepted |
+| [0014](0014-check-inventory-at-assignment-time.md) | Inventory is checked during eligibility and reserved when an assignment is created | Accepted |
 
 ## Creating a New ADR
 
