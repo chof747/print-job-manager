@@ -1,0 +1,634 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Print Job Manager UI Prototype</title>
+    <style>
+      :root {
+        color-scheme: light;
+        font-family:
+          Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+        --bg: #f8fafc;
+        --panel: #ffffff;
+        --border: #e2e8f0;
+        --text: #0f172a;
+        --muted: #64748b;
+        --accent: #4f46e5;
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+
+      body {
+        margin: 0;
+        min-height: 100vh;
+        background: var(--bg);
+        color: var(--text);
+      }
+
+      button {
+        font: inherit;
+      }
+
+      .muted {
+        color: var(--muted);
+      }
+
+      .pill {
+        display: inline-flex;
+        align-items: center;
+        border-radius: 999px;
+        padding: 5px 9px;
+        font-size: 12px;
+        font-weight: 800;
+        white-space: nowrap;
+      }
+
+      .app-shell {
+        display: grid;
+        grid-template-rows: auto minmax(0, 1fr);
+        min-height: 100vh;
+      }
+
+      .top-bar {
+        position: sticky;
+        top: 0;
+        z-index: 10;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 18px;
+        border-bottom: 1px solid var(--border);
+        background: rgba(255, 255, 255, 0.9);
+        padding: 16px 24px 14px;
+        backdrop-filter: blur(16px);
+      }
+
+      .top-left {
+        display: flex;
+        align-items: center;
+        gap: 14px;
+      }
+
+      .burger-button,
+      .drawer-close {
+        display: grid;
+        cursor: pointer;
+        place-items: center;
+        border: 1px solid var(--border);
+        border-radius: 12px;
+        background: white;
+        color: var(--text);
+        box-shadow: 0 1px 2px rgba(15, 23, 42, 0.06);
+      }
+
+      .burger-button {
+        width: 42px;
+        height: 42px;
+      }
+
+      .drawer-close {
+        width: 38px;
+        height: 38px;
+        font-size: 22px;
+        line-height: 1;
+      }
+
+      .burger-icon {
+        display: grid;
+        gap: 4px;
+        width: 18px;
+      }
+
+      .burger-icon span {
+        display: block;
+        height: 2px;
+        border-radius: 999px;
+        background: var(--text);
+      }
+
+      .top-bar h1 {
+        margin: 0;
+        font-size: 22px;
+      }
+
+      .top-tabs {
+        display: flex;
+        gap: 6px;
+        border: 1px solid var(--border);
+        border-radius: 12px;
+        background: #f1f5f9;
+        padding: 4px;
+      }
+
+      .top-tabs span {
+        border-radius: 9px;
+        padding: 8px 11px;
+        color: var(--muted);
+        font-size: 13px;
+        font-weight: 800;
+      }
+
+      .top-tabs .active {
+        background: white;
+        color: var(--text);
+        box-shadow: 0 1px 4px rgba(15, 23, 42, 0.12);
+      }
+
+      .menu-backdrop {
+        position: fixed;
+        inset: 0;
+        z-index: 40;
+        display: none;
+        cursor: pointer;
+        border: 0;
+        background: rgba(15, 23, 42, 0.36);
+        backdrop-filter: blur(3px);
+      }
+
+      .menu-open .menu-backdrop {
+        display: block;
+      }
+
+      .drawer {
+        position: fixed;
+        top: 0;
+        left: 0;
+        z-index: 45;
+        display: grid;
+        align-content: start;
+        gap: 16px;
+        width: min(360px, calc(100vw - 34px));
+        height: 100vh;
+        overflow-y: auto;
+        border-right: 1px solid var(--border);
+        background: var(--bg);
+        padding: 18px;
+        box-shadow: 28px 0 70px rgba(15, 23, 42, 0.22);
+        transform: translateX(-105%);
+        transition: transform 180ms ease;
+      }
+
+      .menu-open .drawer {
+        transform: translateX(0);
+      }
+
+      .drawer-header {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 16px;
+      }
+
+      .drawer-header h2 {
+        margin: 0;
+        font-size: 24px;
+      }
+
+      .card {
+        border: 1px solid var(--border);
+        border-radius: 16px;
+        background: var(--panel);
+        padding: 18px;
+        box-shadow: 0 1px 2px rgba(15, 23, 42, 0.05);
+      }
+
+      .menu {
+        display: grid;
+        gap: 6px;
+      }
+
+      .menu a {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        border-radius: 12px;
+        color: var(--muted);
+        padding: 10px 12px;
+        text-decoration: none;
+        font-size: 14px;
+        font-weight: 800;
+      }
+
+      .menu .active {
+        background: #eef2ff;
+        color: #3730a3;
+      }
+
+      .menu small {
+        border-radius: 999px;
+        background: #f1f5f9;
+        padding: 3px 7px;
+        color: var(--muted);
+        font-size: 11px;
+      }
+
+      .content {
+        display: grid;
+        gap: 18px;
+        padding: 22px 24px 42px;
+      }
+
+      .priority-row {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) 300px;
+        gap: 18px;
+        align-items: stretch;
+      }
+
+      .hero {
+        border-color: #c7d2fe;
+        background: linear-gradient(135deg, #eef2ff, #ffffff);
+      }
+
+      .printer-tabs {
+        display: flex;
+        gap: 8px;
+        margin-bottom: 16px;
+        overflow-x: auto;
+        padding-bottom: 2px;
+      }
+
+      .printer-tab {
+        min-width: 160px;
+        border: 1px solid var(--border);
+        border-radius: 14px;
+        background: white;
+        padding: 11px 12px;
+      }
+
+      .printer-tab.active {
+        border-color: #c7d2fe;
+        background: #eef2ff;
+        color: #3730a3;
+      }
+
+      .printer-tab strong,
+      .printer-tab span {
+        display: block;
+      }
+
+      .printer-tab span {
+        color: var(--muted);
+        font-size: 12px;
+        margin-top: 2px;
+      }
+
+      .printer-focus-grid {
+        display: grid;
+        grid-template-columns: minmax(0, 0.9fr) minmax(0, 1.1fr);
+        gap: 18px;
+      }
+
+      .next-job-card {
+        border: 1px solid #c7d2fe;
+        border-radius: 16px;
+        background: linear-gradient(135deg, #ffffff, #eef2ff);
+        padding: 16px;
+      }
+
+      .next-job-card h2 {
+        margin: 10px 0 8px;
+        font-size: clamp(20px, 3vw, 34px);
+        line-height: 1.02;
+        letter-spacing: -0.05em;
+      }
+
+      .next-job-details {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 10px;
+        margin-top: 16px;
+      }
+
+      .detail-chip {
+        border: 1px solid var(--border);
+        border-radius: 12px;
+        background: rgba(255, 255, 255, 0.72);
+        padding: 10px;
+      }
+
+      .detail-chip span,
+      .metric span {
+        display: block;
+        color: var(--muted);
+        font-size: 11px;
+        font-weight: 800;
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+      }
+
+      .scheduled-list,
+      .row-list {
+        display: grid;
+        gap: 10px;
+      }
+
+      .scheduled-job,
+      .summary-row {
+        display: grid;
+        grid-template-columns: auto minmax(0, 1fr) auto;
+        gap: 12px;
+        align-items: center;
+        border: 1px solid var(--border);
+        border-radius: 14px;
+        background: white;
+        padding: 12px;
+      }
+
+      .queue-position {
+        display: grid;
+        width: 32px;
+        height: 32px;
+        place-items: center;
+        border-radius: 10px;
+        background: #f1f5f9;
+        color: #475569;
+        font-weight: 900;
+      }
+
+      .multi-printer-mark {
+        border: 1px solid #f59e0b;
+        border-radius: 999px;
+        background: #fffbeb;
+        color: #92400e;
+        padding: 4px 8px;
+        font-size: 11px;
+        font-weight: 900;
+        text-transform: uppercase;
+      }
+
+      .actions-grid {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 12px;
+      }
+
+      .action-tile {
+        display: grid;
+        min-height: 104px;
+        align-content: center;
+        gap: 8px;
+        border: 1px solid var(--border);
+        border-radius: 16px;
+        background: white;
+        padding: 14px;
+        color: var(--text);
+        text-align: center;
+        text-decoration: none;
+        box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04);
+      }
+
+      .action-tile.primary {
+        border-color: #c7d2fe;
+        background: #eef2ff;
+        color: #3730a3;
+      }
+
+      .action-icon {
+        display: grid;
+        width: 36px;
+        height: 36px;
+        margin: 0 auto;
+        place-items: center;
+        border-radius: 12px;
+        background: #f1f5f9;
+        font-weight: 900;
+      }
+
+      .action-tile.primary .action-icon {
+        background: var(--accent);
+        color: white;
+      }
+
+      .section-title {
+        display: flex;
+        align-items: end;
+        justify-content: space-between;
+        gap: 16px;
+        margin-bottom: -4px;
+      }
+
+      .section-title h2 {
+        margin: 0;
+        font-size: 22px;
+      }
+
+      .section-title span {
+        color: var(--muted);
+        font-size: 13px;
+      }
+
+      .overview-grid {
+        display: grid;
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+        gap: 18px;
+      }
+
+      .metrics-grid {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 12px;
+      }
+
+      .table {
+        width: 100%;
+        border-collapse: collapse;
+        font-size: 14px;
+      }
+
+      .table th,
+      .table td {
+        border-bottom: 1px solid var(--border);
+        padding: 12px 8px;
+        text-align: left;
+      }
+
+      .table th {
+        color: var(--muted);
+        font-size: 12px;
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+      }
+
+      @media (max-width: 900px) {
+        .top-bar {
+          display: grid;
+          padding: 14px;
+        }
+
+        .content {
+          padding: 14px 14px 32px;
+        }
+
+        .priority-row,
+        .printer-focus-grid,
+        .overview-grid,
+        .next-job-details,
+        .actions-grid {
+          grid-template-columns: 1fr;
+        }
+
+        .section-title {
+          display: grid;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <div class="app-shell" id="app-shell">
+      <header class="top-bar">
+        <div class="top-left">
+          <button class="burger-button" type="button" aria-label="Open navigation menu" aria-expanded="false">
+            <span class="burger-icon" aria-hidden="true"><span></span><span></span><span></span></span>
+          </button>
+          <div>
+            <h1>Print Job Manager</h1>
+            <span class="muted">Structured operations shell</span>
+          </div>
+        </div>
+        <div class="top-tabs"><span class="active">Operations</span><span>Now</span><span>3 printers</span></div>
+      </header>
+
+      <button class="menu-backdrop" type="button" aria-label="Close navigation menu"></button>
+
+      <aside class="drawer" aria-label="Main navigation drawer" aria-hidden="true">
+        <section class="card">
+          <div class="drawer-header">
+            <h2>Menu</h2>
+            <button class="drawer-close" type="button" aria-label="Close navigation menu">×</button>
+          </div>
+          <nav class="menu" aria-label="Main menu">
+            <a class="active" href="#">Operations <small>now</small></a>
+            <a href="#">Import G-code <small>new</small></a>
+            <a href="#">Jobs <small>6</small></a>
+            <a href="#">Printers <small>3</small></a>
+            <a href="#">Scheduler <small>explain</small></a>
+            <a href="#">Failures <small>1</small></a>
+            <a href="#">History / Archive <small>128</small></a>
+          </nav>
+        </section>
+        <section class="card">
+          <h2>System summary</h2>
+          <div class="metrics-grid">
+            <div class="metric"><strong>1</strong><span>Idle</span></div>
+            <div class="metric"><strong>1</strong><span>Action</span></div>
+            <div class="metric"><strong>6</strong><span>Ready</span></div>
+            <div class="metric"><strong>128</strong><span>History</span></div>
+          </div>
+        </section>
+      </aside>
+
+      <main class="content">
+        <section class="priority-row">
+          <article class="card hero">
+            <div class="printer-tabs" aria-label="Printer queues">
+              <div class="printer-tab active"><strong>Voron 2.4</strong><span>idle, ready for assignment</span></div>
+              <div class="printer-tab"><strong>Prusa MK4</strong><span>printing, 42m remaining</span></div>
+              <div class="printer-tab"><strong>Mini</strong><span>paused, needs attention</span></div>
+            </div>
+
+            <div class="printer-focus-grid">
+              <div class="next-job-card">
+                <p class="pill" style="background: #e0e7ff; color: #3730a3">Next print job for Voron 2.4</p>
+                <h2>Panel clips</h2>
+                <p class="muted">Selected because this printer is idle, the job is due today, and black PLA is already loaded.</p>
+                <div class="next-job-details">
+                  <div class="detail-chip"><span>Duration</span><strong>38 minutes</strong></div>
+                  <div class="detail-chip"><span>Material</span><strong>PLA black</strong></div>
+                  <div class="detail-chip"><span>Priority</span><strong>20</strong></div>
+                  <div class="detail-chip"><span>Eligibility</span><strong>Voron + Prusa</strong></div>
+                </div>
+              </div>
+
+              <div>
+                <h2>Next scheduled for this printer</h2>
+                <div class="scheduled-list">
+                  <div class="scheduled-job"><span class="queue-position">1</span><strong>Panel clips<br /><span class="muted">Selected next, due today</span></strong><span class="multi-printer-mark">multi</span></div>
+                  <div class="scheduled-job"><span class="queue-position">2</span><strong>Enclosure hinge<br /><span class="muted">Eligible here if Prusa stays busy</span></strong><span class="multi-printer-mark">multi</span></div>
+                  <div class="scheduled-job"><span class="queue-position">3</span><strong>Desk hook batch<br /><span class="muted">Voron only, fits current material</span></strong><span class="pill" style="background: #f1f5f9; color: #475569">local</span></div>
+                </div>
+              </div>
+            </div>
+          </article>
+
+          <aside class="card">
+            <h2>Most important actions</h2>
+            <div class="actions-grid">
+              <a class="action-tile primary" href="#"><span class="action-icon">GO</span><strong>Start assignment</strong></a>
+              <a class="action-tile" href="#"><span class="action-icon">?</span><strong>Explain pick</strong></a>
+              <a class="action-tile" href="#"><span class="action-icon">+</span><strong>Import G-code</strong></a>
+              <a class="action-tile" href="#"><span class="action-icon">!</span><strong>Resolve failure</strong></a>
+            </div>
+          </aside>
+        </section>
+
+        <div class="section-title">
+          <h2>Operational overview</h2>
+          <span>Printer state, queue shape, and material stock sit below the next-job decision.</span>
+        </div>
+
+        <section class="overview-grid">
+          <article class="card">
+            <h2>Printer state</h2>
+            <div class="row-list">
+              <div class="summary-row"><strong>Voron 2.4<br /><span class="muted">black PLA, 0.4 mm, enclosed</span></strong><span class="pill" style="background: #dcfce7; color: #166534">idle</span></div>
+              <div class="summary-row"><strong>Prusa MK4<br /><span class="muted">Camera mount, 42m left</span></strong><span class="pill" style="background: #dbeafe; color: #1d4ed8">printing</span></div>
+              <div class="summary-row"><strong>Mini<br /><span class="muted">requires user attention</span></strong><span class="pill" style="background: #fef3c7; color: #92400e">paused</span></div>
+            </div>
+          </article>
+
+          <article class="card">
+            <h2>Queue summary</h2>
+            <table class="table">
+              <thead><tr><th>Job</th><th>Eligible</th><th>Status</th></tr></thead>
+              <tbody>
+                <tr><td><strong>Panel clips</strong></td><td>Voron, Prusa <span class="multi-printer-mark">multi</span></td><td>next</td></tr>
+                <tr><td><strong>Enclosure hinge</strong></td><td>Voron, Prusa <span class="multi-printer-mark">multi</span></td><td>ready</td></tr>
+                <tr><td><strong>Gearbox cover</strong></td><td>Mini only</td><td>blocked</td></tr>
+                <tr><td><strong>Desk hook batch</strong></td><td>Voron only</td><td>ready</td></tr>
+              </tbody>
+            </table>
+          </article>
+
+          <article class="card">
+            <h2>Material stock</h2>
+            <div class="row-list">
+              <div class="summary-row"><strong>PLA black<br /><span class="muted">Loaded on Voron 2.4</span></strong><span class="pill" style="background: #dcfce7; color: #166534">820g</span></div>
+              <div class="summary-row"><strong>PETG orange<br /><span class="muted">Loaded on Prusa MK4</span></strong><span class="pill" style="background: #dbeafe; color: #1d4ed8">540g</span></div>
+              <div class="summary-row"><strong>PLA white<br /><span class="muted">Mini spool, attention needed</span></strong><span class="pill" style="background: #fef3c7; color: #92400e">190g</span></div>
+              <div class="summary-row"><strong>ASA black<br /><span class="muted">Available, enclosure required</span></strong><span class="pill" style="background: #f1f5f9; color: #475569">1.1kg</span></div>
+            </div>
+          </article>
+        </section>
+      </main>
+    </div>
+
+    <script>
+      const shell = document.querySelector("#app-shell");
+      const burgerButton = document.querySelector(".burger-button");
+      const drawer = document.querySelector(".drawer");
+      const closeDrawerButton = document.querySelector(".drawer-close");
+      const drawerBackdrop = document.querySelector(".menu-backdrop");
+
+      function setDrawerOpen(isOpen) {
+        shell.classList.toggle("menu-open", isOpen);
+        burgerButton.setAttribute("aria-expanded", String(isOpen));
+        drawer.setAttribute("aria-hidden", String(!isOpen));
+      }
+
+      burgerButton.addEventListener("click", () => setDrawerOpen(true));
+      closeDrawerButton.addEventListener("click", () => setDrawerOpen(false));
+      drawerBackdrop.addEventListener("click", () => setDrawerOpen(false));
+      drawer.querySelectorAll("a").forEach((link) => {
+        link.addEventListener("click", () => setDrawerOpen(false));
+      });
+
+      window.addEventListener("keydown", (event) => {
+        if (event.key === "Escape") setDrawerOpen(false);
+      });
+    </script>
+  </body>
+</html>
