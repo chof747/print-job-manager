@@ -15,6 +15,11 @@ class RootFrontendDevCommandContractTest(unittest.TestCase):
         self.assertTrue(script, "package.json must define a dev:frontend root convenience command")
         self.assertIn("vite", script, "dev:frontend should invoke the frontend through Vite")
         self.assertIn("frontend", script, "dev:frontend should explicitly target the frontend app from the repo root")
+        self.assertIn(
+            "frontend/vite.config.mts",
+            script,
+            "dev:frontend should explicitly load the frontend Vite config from the repo root",
+        )
         self.assertNotIn(
             "pip install",
             script,

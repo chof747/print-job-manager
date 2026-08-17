@@ -10,7 +10,7 @@
     "check:backend": "python3 -m pytest backend/tests -q",
     "check:frontend": "vitest run frontend/",
     "dev:backend": "python3 -m uvicorn backend.app.main:app --reload",
-    "dev:frontend": "vite frontend",
+    "dev:frontend": "vite --config frontend/vite.config.mts frontend",
     "sandcastle": "tsx --env-file=.sandcastle/.env .sandcastle/main.mts",
     "sandcastle:docker": "SANDCASTLE_SANDBOX=docker tsx --env-file=.sandcastle/.env .sandcastle/main.mts",
     "sandcastle:dry-run": "SANDCASTLE_DRY_RUN=true tsx --env-file=.sandcastle/.env .sandcastle/main.mts",

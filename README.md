@@ -12,6 +12,6 @@ This repo now includes a minimal split MVP shell:
 ## Root commands
 
 - `npm run dev:backend` starts the FastAPI app with Uvicorn.
-- `npm run dev:frontend` starts the Vite frontend from the repo root.
+- `npm run dev:frontend` starts the Vite frontend from the repo root with the frontend Vite config.
 - `npm run check:frontend` runs the frontend Vitest suite.
 - `python3 -m pytest backend/tests -q` or `npm run check:backend` runs the backend tests when Python test dependencies are installed.
