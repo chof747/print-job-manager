@@ -2,6 +2,7 @@ import { run, opencode } from "@ai-hero/sandcastle";
 import { docker } from "@ai-hero/sandcastle/sandboxes/docker";
 import { noSandbox } from "@ai-hero/sandcastle/sandboxes/no-sandbox";
 import { execFileSync } from "node:child_process";
+import { readFileSync } from "node:fs";
 
 type GitHubIssue = {
   number: number;
@@ -35,6 +36,18 @@ const dockerCommand = (args: string[]) =>
   execFileSync("docker", args, {
     encoding: "utf8",
   }).trim();
+
+const readInstruction = (path: string) => readFileSync(path, "utf8").trim();
+
+const ralphInstructions = [
+  ["Orchestrator", ".sandcastle/ralph-orchestrator.md"],
+  ["Tester", ".sandcastle/agents/tester.md"],
+  ["Coder", ".sandcastle/agents/coder.md"],
+  ["Reviewer", ".sandcastle/agents/reviewer.md"],
+  ["Handover", ".sandcastle/agents/handover.md"],
+]
+  .map(([name, path]) => `## ${name} Instructions\n\n${readInstruction(path)}`)
+  .join("\n\n");
 
 const assertDockerHasEnoughMemory = () => {
   const memTotal = Number(dockerCommand(["info", "--format", "{{json .MemTotal}}"]));
@@ -93,10 +106,14 @@ const getNextIssue = (): GitHubIssue => {
   return issue;
 };
 
-const buildIssuePrompt = (issue: GitHubIssue) => `Work in this repository.
+const buildIssuePrompt = (issue: GitHubIssue) => `Work in this repository as the ralph-loop orchestrator.
 
 Implement GitHub issue #${issue.number}: ${issue.title}
 ${issue.url}
+
+# Ralph Loop Instructions
+
+${ralphInstructions}
 
 Issue body:
 ${issue.body || "(empty)"}
@@ -110,8 +127,8 @@ ${
 
 Follow the project context in docs/CONTEXT.md and docs/architecture/overview.md.
 Keep changes minimal and pragmatic.
-Run relevant verification.
-If the issue is fully implemented, close it with a concise completion comment.
+Do not directly implement production code or write tests as the orchestrator.
+Coordinate the tester, coder, reviewer, and handover roles according to the Ralph Loop Instructions.
 When the task is complete, output <promise>COMPLETE</promise>.`;
 
 const useDockerSandbox = process.env.SANDCASTLE_SANDBOX === "docker";
