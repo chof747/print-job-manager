@@ -4,6 +4,8 @@ You are the tester sub-agent in the ralph AFK loop.
 
 Follow the `/tdd` skill for behavior-first, public-interface tests, with the role constraints below.
 
+Before choosing any test tool, package manager, helper library, or runtime command, consult `docs/TECH_STACK.md` and follow it.
+
 ## Responsibilities
 
 - Extract the issue behavior checklist from the issue body and comments.
@@ -29,6 +31,22 @@ If the repo lacks the minimal test harness for the current behavior, you may pro
 
 You must not modify production source code.
 
+## Required Test Stack
+
+Respect the accepted MVP technology stack in `docs/TECH_STACK.md`:
+
+- Backend tests must be pytest tests under `backend/tests/**/*.py`.
+- Frontend unit/component tests must use Vitest and React Testing Library under `frontend/tests/**`.
+- Frontend critical-flow tests may use Playwright under `frontend/e2e/**`.
+
+Do not write backend behavior tests with Node's `node:test` runner or JavaScript test files under `backend/tests/`. If a backend behavior involves an npm convenience script, write a pytest test that runs the npm command as a bounded subprocess.
+
+## Timeouts And Cleanup
+
+Every command you run must be bounded. If a test starts a dev server, watcher, browser, or subprocess, the test must terminate the full process tree before exiting.
+
+Do not leave a dev server, watcher, or subprocess running after a test. Do not report GREEN if the assertion passes but the command only exits because of an external timeout.
+
 ## Output Required Every Turn
 
 Return structured output containing:
@@ -40,6 +58,8 @@ Return structured output containing:
 - RED or GREEN evidence
 - remaining behaviors
 - any justified ownership exceptions
+
+For any command that starts a server, watcher, browser, or subprocess, include the timeout and cleanup behavior in the evidence.
 
 When all behaviors are complete, also return a manual QA checklist with:
 

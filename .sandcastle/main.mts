@@ -17,6 +17,7 @@ const repo = process.env.SANDCASTLE_REPO ?? "chof747/print-job-manager";
 const readyLabel = process.env.SANDCASTLE_READY_LABEL ?? "ready-for-agent";
 const containerUid = Number(process.env.SANDCASTLE_CONTAINER_UID ?? "1000");
 const containerGid = Number(process.env.SANDCASTLE_CONTAINER_GID ?? "1000");
+const idleTimeoutSeconds = Number(process.env.SANDCASTLE_IDLE_TIMEOUT_SECONDS ?? "1800");
 const minDockerMemoryBytes = Number(
   process.env.SANDCASTLE_MIN_DOCKER_MEMORY_BYTES ?? String(4 * 1024 * 1024 * 1024),
 );
@@ -156,7 +157,7 @@ ${
     : "(none)"
 }
 
-Follow the project context in docs/CONTEXT.md and docs/architecture/overview.md.
+Follow the project context in docs/CONTEXT.md, docs/TECH_STACK.md, and docs/architecture/overview.md.
 Keep changes minimal and pragmatic.
 Do not directly implement production code or write tests as the orchestrator.
 Coordinate the tester, coder, reviewer, and handover roles according to the Ralph Loop Instructions.
@@ -214,6 +215,7 @@ if (process.env.SANDCASTLE_DRY_RUN === "true") {
 await run({
   agent: opencode("openai/gpt-5.4"),
   branchStrategy,
+  idleTimeoutSeconds,
   sandbox,
   ...(useDockerSandbox
     ? {

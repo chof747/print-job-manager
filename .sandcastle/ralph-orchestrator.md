@@ -7,7 +7,7 @@ Your job is to coordinate specialist sub-agents and repository operations. You m
 ## Inputs
 
 - A GitHub issue selected by Sandcastle.
-- The project context in `docs/CONTEXT.md`, `docs/architecture/overview.md`, and accepted ADRs.
+- The project context in `docs/CONTEXT.md`, `docs/TECH_STACK.md`, `docs/architecture/overview.md`, and accepted ADRs.
 - The role instructions in `.sandcastle/agents/`.
 
 ## Skill Usage
@@ -39,17 +39,49 @@ Coder may modify anything except:
 - `frontend/tests/**`
 - `frontend/e2e/**`
 
-Test harness, dependency, lockfile, or config changes are allowed only when necessary and explicitly justified by the sub-agent. Use `.sandcastle/scripts/check-agent-file-ownership.mts` after each tester/coder turn. If ownership is violated, treat the result as invalid and retry with stricter instructions. Do not revert arbitrary changes yourself.
+Test harness, dependency, lockfile, or config changes are allowed only when necessary and explicitly justified by the sub-agent. Tester exceptions are restricted to test harness/dependency config files; do not pass production source paths as tester `--allow` exceptions.
+
+Use `.sandcastle/scripts/check-agent-file-ownership.mts` with a per-turn snapshot before and after each tester/coder turn. Do not check the whole branch diff against `HEAD`, because that mixes earlier coder changes into later tester checks.
+
+Before each sub-agent turn, run:
+
+```sh
+npx tsx .sandcastle/scripts/check-agent-file-ownership.mts --role <tester|coder> --snapshot-out .sandcastle/tmp/<role>-before.json
+```
+
+After that sub-agent turn, run:
+
+```sh
+npx tsx .sandcastle/scripts/check-agent-file-ownership.mts --role <tester|coder> --snapshot-in .sandcastle/tmp/<role>-before.json
+```
+
+If ownership or test-stack validation fails, treat the result as invalid and retry with stricter instructions. Do not revert arbitrary changes yourself.
+
+## Test Stack
+
+The accepted MVP stack is documented in `docs/TECH_STACK.md` and must be respected. Every agent must consult it before choosing frameworks, libraries, test tools, package managers, or runtime commands.
+
+- Backend tests use pytest under `backend/tests/**/*.py`.
+- Frontend unit/component tests use Vitest and React Testing Library under `frontend/tests/**`.
+- Frontend critical flows use Playwright under `frontend/e2e/**`.
+
+Do not allow backend behavior tests written with Node's `node:test` runner. If a backend test needs to exercise an npm convenience script, the pytest test may spawn that command as a subprocess, but the test itself must still be pytest.
+
+## Command Timeouts And Process Cleanup
+
+Every sub-agent command that can run a server, watcher, dev command, E2E browser, or long-running subprocess must have an explicit timeout and must clean up the whole spawned process tree.
+
+Do not run watchers or dev servers as open-ended verification commands. Start them only from a bounded test harness or bounded shell command that proves readiness and then terminates them.
 
 ## Behavior Loop
 
 1. Ask the tester to extract a behavior checklist from the issue body and comments.
 2. Have the tester select the next unimplemented behavior and write one RED test slice for that behavior only.
 3. Confirm the tester provides RED evidence and changed files.
-4. Run the ownership guard for the tester turn.
+4. Run the ownership and test-stack guard for the tester turn using the per-turn snapshot.
 5. Ask the coder to implement the minimal production change required to make the current RED test pass.
 6. Allow the coder to run the targeted test only to confirm green; the tester remains the verification authority.
-7. Run the ownership guard for the coder turn.
+7. Run the ownership guard for the coder turn using the per-turn snapshot.
 8. Ask the tester to verify the targeted test and a relevant broader command.
 9. Repeat until the tester explicitly says all issue behaviors are implemented.
 
