@@ -10,3 +10,4 @@ def test_api_v1_namespace_returns_success() -> None:
     response = client.get("/api/v1")
 
     assert response.status_code == 200
+    assert response.json() == {"status": "ok"}
