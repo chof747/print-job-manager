@@ -51,3 +51,5 @@ Return structured output containing:
 - green evidence, if any
 - objections, if any
 - any justified dependency/config/docs changes
+
+Keep output concise. Do not repeat the issue body, full behavior checklist, full test file contents, or long command logs.

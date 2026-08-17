@@ -2,7 +2,6 @@ import { run, opencode } from "@ai-hero/sandcastle";
 import { docker } from "@ai-hero/sandcastle/sandboxes/docker";
 import { noSandbox } from "@ai-hero/sandcastle/sandboxes/no-sandbox";
 import { execFileSync } from "node:child_process";
-import { readFileSync } from "node:fs";
 
 type GitHubIssue = {
   number: number;
@@ -37,18 +36,6 @@ const dockerCommand = (args: string[]) =>
   execFileSync("docker", args, {
     encoding: "utf8",
   }).trim();
-
-const readInstruction = (path: string) => readFileSync(path, "utf8").trim();
-
-const ralphInstructions = [
-  ["Orchestrator", ".sandcastle/ralph-orchestrator.md"],
-  ["Tester", ".sandcastle/agents/tester.md"],
-  ["Coder", ".sandcastle/agents/coder.md"],
-  ["Reviewer", ".sandcastle/agents/reviewer.md"],
-  ["Handover", ".sandcastle/agents/handover.md"],
-]
-  .map(([name, path]) => `## ${name} Instructions\n\n${readInstruction(path)}`)
-  .join("\n\n");
 
 const assertDockerHasEnoughMemory = () => {
   const memTotal = Number(dockerCommand(["info", "--format", "{{json .MemTotal}}"]));
@@ -145,7 +132,16 @@ ${issue.url}
 
 # Ralph Loop Instructions
 
-${ralphInstructions}
+Before starting implementation, read and follow these files:
+
+- .sandcastle/ralph-orchestrator.md
+- .sandcastle/agents/tester.md
+- .sandcastle/agents/coder.md
+- .sandcastle/agents/reviewer.md
+- .sandcastle/agents/handover.md
+- docs/TECH_STACK.md
+
+Do not inline or repeat these files in your responses. Keep orchestrator messages concise.
 
 Issue body:
 ${issue.body || "(empty)"}

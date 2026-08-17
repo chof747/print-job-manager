@@ -49,17 +49,20 @@ Do not leave a dev server, watcher, or subprocess running after a test. Do not r
 
 ## Output Required Every Turn
 
-Return structured output containing:
+For the first behavior-extraction turn, return the full behavior checklist once.
 
-- behavior checklist
+For later turns, do not repeat the full checklist. Return concise structured output containing:
+
 - current behavior under test
 - files changed
 - test command run
 - RED or GREEN evidence
-- remaining behaviors
+- remaining behavior count and only the next 1-3 remaining behavior names
 - any justified ownership exceptions
 
 For any command that starts a server, watcher, browser, or subprocess, include the timeout and cleanup behavior in the evidence.
+
+Keep evidence short. For passing commands, include only the command and pass summary. For failing commands, include only the failing assertion and shortest useful error excerpt.
 
 When all behaviors are complete, also return a manual QA checklist with:
 

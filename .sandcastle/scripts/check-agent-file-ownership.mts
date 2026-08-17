@@ -7,7 +7,7 @@ type Role = "tester" | "coder";
 
 type Snapshot = Record<string, string>;
 
-const usage = `Usage: tsx .sandcastle/scripts/check-agent-file-ownership.mts --role <tester|coder> (--base <ref> | --snapshot-in <file> | --snapshot-out <file>) [--allow <path-prefix>]...
+const usage = `Usage: tsx .sandcastle/scripts/check-agent-file-ownership.mts --role <tester|coder> (--snapshot-in <file> | --snapshot-out <file> | --base <ref> --manual-base-mode) [--allow <path-prefix>]...
 
 Checks changed files against ralph-loop tester/coder ownership rules.
 
@@ -15,13 +15,14 @@ Preferred ralph-loop usage:
   1. Before a sub-agent turn: --snapshot-out .sandcastle/tmp/<role>-before.json
   2. After the sub-agent turn: --snapshot-in .sandcastle/tmp/<role>-before.json
 
-The --base mode is retained for coarse manual checks only.`;
+The --base mode is retained for coarse manual checks only and requires --manual-base-mode.`;
 
 const args = process.argv.slice(2);
 let role: Role | undefined;
 let base: string | undefined;
 let snapshotIn: string | undefined;
 let snapshotOut: string | undefined;
+let manualBaseMode = false;
 const allowedExceptions: string[] = [];
 
 for (let index = 0; index < args.length; index += 1) {
@@ -74,6 +75,11 @@ for (let index = 0; index < args.length; index += 1) {
     continue;
   }
 
+  if (arg === "--manual-base-mode") {
+    manualBaseMode = true;
+    continue;
+  }
+
   throw new Error(`${usage}\n\nUnknown argument: ${arg}`);
 }
 
@@ -84,6 +90,10 @@ if (!role) {
 const modeCount = [base, snapshotIn, snapshotOut].filter(Boolean).length;
 if (modeCount !== 1) {
   throw new Error(`${usage}\n\nPass exactly one of --base, --snapshot-in, or --snapshot-out.`);
+}
+
+if (base && !manualBaseMode) {
+  throw new Error(`${usage}\n\n--base is coarse manual mode only. Use --snapshot-out before a sub-agent turn and --snapshot-in after it.`);
 }
 
 const testPrefixes = ["backend/tests/", "frontend/tests/", "frontend/e2e/"];

@@ -41,7 +41,7 @@ Coder may modify anything except:
 
 Test harness, dependency, lockfile, or config changes are allowed only when necessary and explicitly justified by the sub-agent. Tester exceptions are restricted to test harness/dependency config files; do not pass production source paths as tester `--allow` exceptions.
 
-Use `.sandcastle/scripts/check-agent-file-ownership.mts` with a per-turn snapshot before and after each tester/coder turn. Do not check the whole branch diff against `HEAD`, because that mixes earlier coder changes into later tester checks.
+Use `.sandcastle/scripts/check-agent-file-ownership.mts` with a per-turn snapshot before and after each tester/coder turn. Do not use `git stash create`, `git diff --base`, or a `--base` guard for normal ralph-loop checks, because those patterns mix earlier changes into later role checks and increase context noise.
 
 Before each sub-agent turn, run:
 
@@ -56,6 +56,16 @@ npx tsx .sandcastle/scripts/check-agent-file-ownership.mts --role <tester|coder>
 ```
 
 If ownership or test-stack validation fails, treat the result as invalid and retry with stricter instructions. Do not revert arbitrary changes yourself.
+
+## Context Budget
+
+Keep the orchestrator context small enough for a long AFK loop:
+
+- Do not paste full instruction files, full issue bodies, or full behavior checklists after the first extraction.
+- Ask sub-agents for concise delta output after each turn.
+- Summarize completed behavior state in one short paragraph before the next sub-agent call.
+- Prefer file paths and command names over large copied logs.
+- If a command passes, quote only the summary line. If it fails, quote only the failing assertion and the shortest useful error excerpt.
 
 ## Test Stack
 
@@ -75,9 +85,9 @@ Do not run watchers or dev servers as open-ended verification commands. Start th
 
 ## Behavior Loop
 
-1. Ask the tester to extract a behavior checklist from the issue body and comments.
+1. Ask the tester to extract a behavior checklist from the issue body and comments once.
 2. Have the tester select the next unimplemented behavior and write one RED test slice for that behavior only.
-3. Confirm the tester provides RED evidence and changed files.
+3. Confirm the tester provides concise RED evidence and changed files.
 4. Run the ownership and test-stack guard for the tester turn using the per-turn snapshot.
 5. Ask the coder to implement the minimal production change required to make the current RED test pass.
 6. Allow the coder to run the targeted test only to confirm green; the tester remains the verification authority.

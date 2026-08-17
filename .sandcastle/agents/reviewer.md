@@ -31,3 +31,5 @@ Return structured output containing:
 - recommended routing for each AFK finding
 
 Do not merge away the Standards/Spec distinction from `/code-review`.
+
+Keep the review concise. Report findings with file paths, line references where available, and short evidence excerpts only.
