@@ -19,6 +19,9 @@ const containerUid = Number(process.env.SANDCASTLE_CONTAINER_UID ?? "1000");
 const containerGid = Number(process.env.SANDCASTLE_CONTAINER_GID ?? "1000");
 const idleTimeoutSeconds = Number(process.env.SANDCASTLE_IDLE_TIMEOUT_SECONDS ?? "1800");
 const maxIterations = Number(process.env.SANDCASTLE_MAX_ITERATIONS ?? "5");
+const logVerbose = process.env.SANDCASTLE_LOG_VERBOSE === "true";
+const installProjectDeps = process.env.SANDCASTLE_INSTALL_PROJECT_DEPS !== "false";
+const installNodeDeps = process.env.SANDCASTLE_INSTALL_NODE_DEPS !== "false";
 const minDockerMemoryBytes = Number(
   process.env.SANDCASTLE_MIN_DOCKER_MEMORY_BYTES ?? String(4 * 1024 * 1024 * 1024),
 );
@@ -248,6 +251,8 @@ const sandbox = useDockerSandbox
         HOME: "/home/agent",
         GH_TOKEN: process.env.GH_TOKEN ?? process.env.GITHUB_TOKEN ?? "",
         GITHUB_TOKEN: process.env.GITHUB_TOKEN ?? process.env.GH_TOKEN ?? "",
+        PATH:
+          "/home/agent/workspace/node_modules/.bin:/tmp/sandcastle-python/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin",
         XDG_STATE_HOME: "/tmp/opencode-state",
         XDG_CACHE_HOME: "/tmp/opencode-cache",
       },
@@ -304,6 +309,22 @@ await run({
                 command:
                   "python3 -m pip --version && python3 -m venv /tmp/sandcastle-venv-check && rm -rf /tmp/sandcastle-venv-check && node --version && npm --version && gh --version",
               },
+              ...(installProjectDeps
+                ? [
+                    {
+                      command:
+                        "python3 -m venv /tmp/sandcastle-python && . /tmp/sandcastle-python/bin/activate && if [ -f backend/requirements.txt ]; then python -m pip install -r backend/requirements.txt; fi && if [ -f backend/tests/requirements.txt ]; then python -m pip install -r backend/tests/requirements.txt; fi && python -m pytest --version && python -c 'import fastapi, uvicorn'",
+                    },
+                  ]
+                : []),
+              ...(installNodeDeps
+                ? [
+                    {
+                      command:
+                        "if [ -f package.json ]; then if [ -f package-lock.json ]; then npm ci; else npm install; fi; fi && if [ -f package.json ]; then npm exec vitest -- --version; fi",
+                    },
+                  ]
+                : []),
             ],
           },
         },
@@ -312,6 +333,6 @@ await run({
   prompt,
   logging: {
     type: "stdout",
-    verbose: true,
+    verbose: logVerbose,
   },
 });

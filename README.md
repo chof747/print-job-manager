@@ -7,6 +7,12 @@ Sandcastle can pick up GitHub issues and implement them in an isolated worktree 
 
 GitHub writes use the `gh` CLI inside the sandbox. Make sure `.sandcastle/.env` contains a `GH_TOKEN` with repository write access; the sandbox runs `gh auth setup-git` so `git push` can authenticate.
 
+Normal Sandcastle logs are human-readable. Set `SANDCASTLE_LOG_VERBOSE=true` only when debugging provider stream issues; it prints raw OpenCode JSON events and is intentionally noisy.
+
+The sandbox installs project-declared backend dependencies into a temporary venv before the agent starts, so agents can verify backend code without bootstrapping tooling themselves. Set `SANDCASTLE_INSTALL_PROJECT_DEPS=false` to skip this setup.
+
+The sandbox also installs Node dependencies before the agent starts, so frontend tools like Vitest are available on `PATH`. Set `SANDCASTLE_INSTALL_NODE_DEPS=false` to skip this setup.
+
 Build the local Sandcastle Docker image after changing `.sandcastle/Dockerfile`:
 
 ```sh
