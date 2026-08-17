@@ -7,7 +7,7 @@ Your job is to coordinate specialist sub-agents and repository operations. You m
 ## Inputs
 
 - A GitHub issue selected by Sandcastle.
-- The project context in `docs/CONTEXT.md`, `docs/architecture/overview.md`, and accepted ADRs.
+- The project context in `docs/CONTEXT.md`, `docs/TECH_STACK.md`, `docs/architecture/overview.md`, and accepted ADRs.
 - The role instructions in `.sandcastle/agents/`.
 
 ## Skill Usage
@@ -39,17 +39,95 @@ Coder may modify anything except:
 - `frontend/tests/**`
 - `frontend/e2e/**`
 
-Test harness, dependency, lockfile, or config changes are allowed only when necessary and explicitly justified by the sub-agent. Use `.sandcastle/scripts/check-agent-file-ownership.mts` after each tester/coder turn. If ownership is violated, treat the result as invalid and retry with stricter instructions. Do not revert arbitrary changes yourself.
+Test harness, dependency, lockfile, or config changes are allowed only when necessary and explicitly justified by the sub-agent. Tester exceptions are restricted to test harness/dependency config files; do not pass production source paths as tester `--allow` exceptions.
+
+Use `.sandcastle/scripts/check-agent-file-ownership.mts` with a per-turn snapshot before and after each tester/coder turn. Do not use `git stash create`, `git diff --base`, or a `--base` guard for normal ralph-loop checks, because those patterns mix earlier changes into later role checks and increase context noise.
+
+Before each sub-agent turn, run:
+
+```sh
+npx tsx .sandcastle/scripts/check-agent-file-ownership.mts --role <tester|coder> --snapshot-out .sandcastle/tmp/<role>-before.json
+```
+
+After that sub-agent turn, run:
+
+```sh
+npx tsx .sandcastle/scripts/check-agent-file-ownership.mts --role <tester|coder> --snapshot-in .sandcastle/tmp/<role>-before.json
+```
+
+If ownership or test-stack validation fails, treat the result as invalid and retry with stricter instructions. Do not revert arbitrary changes yourself.
+
+## Context Budget
+
+Keep the orchestrator context small enough for a long AFK loop:
+
+- Do not paste full instruction files, full issue bodies, or full behavior checklists after the first extraction.
+- Ask sub-agents for concise delta output after each turn.
+- Summarize completed behavior state in one short paragraph before the next sub-agent call.
+- Prefer file paths and command names over large copied logs.
+- If a command passes, quote only the summary line. If it fails, quote only the failing assertion and the shortest useful error excerpt.
+
+## Test Stack
+
+The accepted MVP stack is documented in `docs/TECH_STACK.md` and must be respected. Every agent must consult it before choosing frameworks, libraries, test tools, package managers, or runtime commands.
+
+- Backend tests use pytest under `backend/tests/**/*.py`.
+- Frontend unit/component tests use Vitest and React Testing Library under `frontend/tests/**`.
+- Frontend critical flows use Playwright under `frontend/e2e/**`.
+
+Do not allow backend behavior tests written with Node's `node:test` runner.
+
+## Test Appropriateness Gate
+
+Before accepting a tester RED slice, reject it if the committed test shells out to recursive check commands, package-manager install commands, dev servers, watchers, or the same test command that is currently running.
+
+Forbidden in committed tests:
+
+- `npm run check:*`
+- `npm test`
+- `pytest`
+- `vitest`
+- `npm install`
+- `pip install`
+- `npm run dev:*`
+- `vite`
+- `uvicorn`
+- long-running server/watch commands
+
+For developer-command acceptance criteria, require static assertions such as parsing `package.json` for expected script keys and command shapes. For local dev-server startup, use bounded smoke verification during the run and put the steps in the final QA checklist instead of committing server-startup tests, unless the issue explicitly requests those integration tests.
+
+## Command Timeouts And Process Cleanup
+
+Every sub-agent command that can run a server, watcher, dev command, E2E browser, or long-running subprocess must have an explicit timeout and must clean up the whole spawned process tree.
+
+Do not run watchers or dev servers as open-ended verification commands. Start them only from a bounded test harness or bounded shell command that proves readiness and then terminates them.
+
+## Sandbox Tooling
+
+The Sandcastle Docker image owns interpreter and package-manager availability. Agents must not bootstrap `pip`, Python `venv` support, Node, npm, system packages, or OS package managers during implementation or verification.
+
+If required sandbox tooling is missing, stop without creating a PR and report an environment blocker. Do not download installer scripts, run `get-pip.py`, install package managers, or mutate user-local tooling to continue.
+
+## GitHub Writes
+
+Use the `gh` CLI for GitHub write operations during finalization:
+
+- push with `git push -u origin HEAD`
+- create the PR with `gh pr create`
+- post the handover with `gh pr comment`
+- update labels with `gh issue edit`
+
+Do not use separate GitHub MCP/tool calls for branch, PR, comment, or label writes during Sandcastle finalization. The sandbox startup configures `gh auth setup-git` so plain `git push` authenticates through the GitHub CLI credential helper.
 
 ## Behavior Loop
 
-1. Ask the tester to extract a behavior checklist from the issue body and comments.
+1. Ask the tester to extract a behavior checklist from the issue body and comments once.
 2. Have the tester select the next unimplemented behavior and write one RED test slice for that behavior only.
-3. Confirm the tester provides RED evidence and changed files.
-4. Run the ownership guard for the tester turn.
+3. Confirm the tester provides concise RED evidence and changed files.
+4. Run the ownership and test-stack guard for the tester turn using the per-turn snapshot.
 5. Ask the coder to implement the minimal production change required to make the current RED test pass.
 6. Allow the coder to run the targeted test only to confirm green; the tester remains the verification authority.
-7. Run the ownership guard for the coder turn.
+7. Run the ownership guard for the coder turn using the per-turn snapshot.
 8. Ask the tester to verify the targeted test and a relevant broader command.
 9. Repeat until the tester explicitly says all issue behaviors are implemented.
 

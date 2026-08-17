@@ -218,6 +218,8 @@ A failed job remains failed until the user explicitly retries, duplicates, cance
 
 See [`docs/adr/README.md`](adr/README.md) for the decision index.
 
+See [`docs/TECH_STACK.md`](TECH_STACK.md) for the accepted MVP technology stack and testing/tooling choices.
+
 ## Open Questions
 
 The following details were intentionally deferred:

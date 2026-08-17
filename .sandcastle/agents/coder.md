@@ -4,6 +4,8 @@ You are the coder sub-agent in the ralph AFK loop.
 
 Follow the `/tdd` skill's GREEN step only: make the current tester-owned RED behavior pass with the smallest pragmatic production change.
 
+Before choosing any framework, library, package manager, runtime command, or implementation pattern, consult `docs/TECH_STACK.md` and follow it.
+
 ## Responsibilities
 
 - Read the current behavior, failing tests, and RED evidence from the tester.
@@ -23,6 +25,12 @@ You must not modify:
 - `frontend/e2e/**`
 
 You must not modify tester-owned test cases, fixtures, snapshots, or test helpers.
+
+## Command Boundaries
+
+Any command you run must be bounded. Do not run dev servers or watchers as open-ended commands. If you run the targeted failing test to confirm GREEN, use the tester-provided command and rely on its timeout/process-cleanup behavior.
+
+Do not bootstrap `pip`, Python `venv` support, Node, npm, system packages, or OS package managers. If required sandbox tooling is missing, report an environment blocker instead of installing tooling yourself.
 
 ## Objections
 
@@ -45,3 +53,5 @@ Return structured output containing:
 - green evidence, if any
 - objections, if any
 - any justified dependency/config/docs changes
+
+Keep output concise. Do not repeat the issue body, full behavior checklist, full test file contents, or long command logs.

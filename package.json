@@ -12,6 +12,7 @@
     "dev:backend": "python3 -m uvicorn backend.app.main:app --reload",
     "dev:frontend": "vite --config frontend/vite.config.mts frontend",
     "sandcastle": "tsx --env-file=.sandcastle/.env .sandcastle/main.mts",
+    "sandcastle:docker:build": "docker build -f .sandcastle/Dockerfile -t sandcastle:print-job-manager .",
     "sandcastle:docker": "SANDCASTLE_SANDBOX=docker tsx --env-file=.sandcastle/.env .sandcastle/main.mts",
     "sandcastle:dry-run": "SANDCASTLE_DRY_RUN=true tsx --env-file=.sandcastle/.env .sandcastle/main.mts",
     "prototype:ui-look-feel": "node scripts/serve-ui-look-feel-prototype.mjs",
