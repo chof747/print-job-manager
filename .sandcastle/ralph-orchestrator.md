@@ -91,7 +91,7 @@ After all AFK work is complete:
 1. Ask the tester for a final manual QA checklist.
 2. Generate handover information using `/handoff` before creating the PR.
 3. Commit once at the end with a concise issue-based message.
-4. Push a branch named by issue type unless resuming an existing PR branch: enhancements use `feat/issue-<number>-<short-slug>`, bugs use `bug/issue-<number>-<short-slug>`. If the issue type is unclear, infer from labels/title/body; if it is still unclear, use `feat/issue-<number>-<short-slug>`.
+4. Use the Sandcastle-created branch named by issue label unless resuming an existing PR branch: `enhancement` issues use `feat/issue-<number>-<short-slug>`, `bug` issues use `bug/issue-<number>-<short-slug>`, and issues with neither label use `issue/issue-<number>-<short-slug>`.
 5. Create a PR whose body includes `Closes #<issue-number>` and the full manual QA checklist.
 6. If there are HILT findings, create the PR as draft and include a clear warning in the PR body.
 7. Post the handover as a separate PR comment.

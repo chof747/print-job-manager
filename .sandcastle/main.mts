@@ -106,6 +106,37 @@ const getNextIssue = (): GitHubIssue => {
   return issue;
 };
 
+const slugify = (title: string) => {
+  const fillerWords = new Set(["a", "an", "and", "for", "implement", "the", "to"]);
+
+  const words = title
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, " ")
+    .trim()
+    .split(/\s+/)
+    .filter((word) => word && !fillerWords.has(word))
+    .slice(0, 6);
+
+  return words.join("-") || "update";
+};
+
+const getIssueBranchPrefix = (issue: GitHubIssue) => {
+  const labels = issue.labels.map((label) => label.name.toLowerCase());
+
+  if (labels.includes("bug")) {
+    return "bug";
+  }
+
+  if (labels.includes("enhancement")) {
+    return "feat";
+  }
+
+  return "issue";
+};
+
+const getIssueBranchName = (issue: GitHubIssue) =>
+  `${getIssueBranchPrefix(issue)}/issue-${issue.number}-${slugify(issue.title)}`;
+
 const buildIssuePrompt = (issue: GitHubIssue) => `Work in this repository as the ralph-loop orchestrator.
 
 Implement GitHub issue #${issue.number}: ${issue.title}
@@ -164,13 +195,16 @@ const sandbox = useDockerSandbox
     })
   : noSandbox();
 
-const prompt =
-  process.env.SANDCASTLE_PROMPT ??
-  buildIssuePrompt(
-    process.env.SANDCASTLE_ISSUE_NUMBER
-      ? getIssue(process.env.SANDCASTLE_ISSUE_NUMBER)
-      : getNextIssue(),
-  );
+const selectedIssue = process.env.SANDCASTLE_PROMPT
+  ? undefined
+  : process.env.SANDCASTLE_ISSUE_NUMBER
+    ? getIssue(process.env.SANDCASTLE_ISSUE_NUMBER)
+    : getNextIssue();
+
+const prompt = process.env.SANDCASTLE_PROMPT ?? buildIssuePrompt(selectedIssue!);
+const branchStrategy = selectedIssue
+  ? { type: "branch" as const, branch: getIssueBranchName(selectedIssue) }
+  : { type: "merge-to-head" as const };
 
 if (process.env.SANDCASTLE_DRY_RUN === "true") {
   console.log(prompt);
@@ -179,7 +213,7 @@ if (process.env.SANDCASTLE_DRY_RUN === "true") {
 
 await run({
   agent: opencode("openai/gpt-5.4"),
-  branchStrategy: { type: "merge-to-head" },
+  branchStrategy,
   sandbox,
   ...(useDockerSandbox
     ? {
