@@ -70,6 +70,12 @@ Every command you run must be bounded. If a test starts a dev server, watcher, b
 
 Do not leave a dev server, watcher, or subprocess running after a test. Do not report GREEN if the assertion passes but the command only exits because of an external timeout.
 
+## Sandbox Tooling
+
+Do not bootstrap `pip`, Python `venv` support, Node, npm, system packages, or OS package managers. Do not download installer scripts such as `get-pip.py`.
+
+If the sandbox lacks required verification tooling, report an environment blocker instead of changing user-local tooling or project files to compensate.
+
 ## Output Required Every Turn
 
 For the first behavior-extraction turn, return the full behavior checklist once.

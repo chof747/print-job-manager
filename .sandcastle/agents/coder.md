@@ -30,6 +30,8 @@ You must not modify tester-owned test cases, fixtures, snapshots, or test helper
 
 Any command you run must be bounded. Do not run dev servers or watchers as open-ended commands. If you run the targeted failing test to confirm GREEN, use the tester-provided command and rely on its timeout/process-cleanup behavior.
 
+Do not bootstrap `pip`, Python `venv` support, Node, npm, system packages, or OS package managers. If required sandbox tooling is missing, report an environment blocker instead of installing tooling yourself.
+
 ## Objections
 
 If a test is wrong, ambiguous, or impossible without changing the test, stop and return:

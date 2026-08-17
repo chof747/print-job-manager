@@ -192,6 +192,10 @@ Before continuing implementation, read and follow these files when present:
 
 If docs/TECH_STACK.md is not present in this older worktree, use the accepted stack from issue #31: Python/FastAPI backend, pytest backend tests, React/Vite/TypeScript frontend, Vitest/React Testing Library frontend tests, and Playwright only for critical flows.
 
+Sandbox tooling rule: do not bootstrap pip, Python venv support, Node, npm, system packages, or OS package managers. Do not download installer scripts such as get-pip.py. If required sandbox tooling is missing, stop and report an environment blocker instead of mutating user-local tooling or project files to compensate.
+
+GitHub write rule: use the gh CLI for GitHub writes: git push, gh pr create, gh pr comment, and gh issue edit. Do not use separate GitHub MCP/tool calls for branch, PR, comment, or label writes during Sandcastle finalization. The sandbox configures gh auth setup-git so plain git push can authenticate through the GitHub CLI credential helper.
+
 If .sandcastle/agents/tester.md is not present in this older worktree, use this fallback test-appropriateness rule: committed tests must not invoke recursive check commands, package-manager install commands, dev servers, watchers, or the same test command currently running. Replace such tests with static assertions, such as parsing package.json for expected script keys and command shapes. Verify dev-server startup with bounded smoke commands during the run and include those steps in the final QA checklist instead of committing server-startup tests.
 
 Do not inline or repeat instruction files in your responses. Keep orchestrator messages concise.
@@ -207,11 +211,11 @@ Resume finalization contract:
 - Before final completion, obtain or construct a final manual QA checklist for the PR body.
 - Run or summarize final review status. Fix all AFK findings before PR creation. HILT findings do not block PR creation, but require a draft PR and a separate HILT findings PR comment.
 - Commit once with a concise issue-based message.
-- Push the current branch.
-- Create a PR whose body includes Closes #${issue.number}, implemented behavior summary, automated verification, and the full manual QA checklist.
-- Post a separate handover PR comment.
-- Remove ready-for-agent from the issue.
-- Add ready-for-qa when no HILT findings remain, or needs-info when HILT findings remain. Create only those labels if missing.
+- Push the current branch using git push -u origin HEAD.
+- Create a PR using gh pr create; the body must include Closes #${issue.number}, implemented behavior summary, automated verification, and the full manual QA checklist.
+- Post a separate handover PR comment using gh pr comment.
+- Remove ready-for-agent from the issue using gh issue edit.
+- Add ready-for-qa when no HILT findings remain, or needs-info when HILT findings remain using gh issue edit. Create only those labels if missing.
 
 Issue body:
 ${issue.body || "(empty)"}
@@ -294,7 +298,11 @@ await run({
             onSandboxReady: [
               {
                 command:
-                  "mkdir -p /tmp/opencode-state /tmp/opencode-cache /home/agent/.local/share/opencode/log && cp /home/agent/host-auth/auth.json /home/agent/.local/share/opencode/auth.json",
+                  "mkdir -p /tmp/opencode-state /tmp/opencode-cache /home/agent/.local/share/opencode/log && cp /home/agent/host-auth/auth.json /home/agent/.local/share/opencode/auth.json && gh auth setup-git",
+              },
+              {
+                command:
+                  "python3 -m pip --version && python3 -m venv /tmp/sandcastle-venv-check && rm -rf /tmp/sandcastle-venv-check && node --version && npm --version && gh --version",
               },
             ],
           },

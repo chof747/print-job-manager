@@ -102,6 +102,23 @@ Every sub-agent command that can run a server, watcher, dev command, E2E browser
 
 Do not run watchers or dev servers as open-ended verification commands. Start them only from a bounded test harness or bounded shell command that proves readiness and then terminates them.
 
+## Sandbox Tooling
+
+The Sandcastle Docker image owns interpreter and package-manager availability. Agents must not bootstrap `pip`, Python `venv` support, Node, npm, system packages, or OS package managers during implementation or verification.
+
+If required sandbox tooling is missing, stop without creating a PR and report an environment blocker. Do not download installer scripts, run `get-pip.py`, install package managers, or mutate user-local tooling to continue.
+
+## GitHub Writes
+
+Use the `gh` CLI for GitHub write operations during finalization:
+
+- push with `git push -u origin HEAD`
+- create the PR with `gh pr create`
+- post the handover with `gh pr comment`
+- update labels with `gh issue edit`
+
+Do not use separate GitHub MCP/tool calls for branch, PR, comment, or label writes during Sandcastle finalization. The sandbox startup configures `gh auth setup-git` so plain `git push` authenticates through the GitHub CLI credential helper.
+
 ## Behavior Loop
 
 1. Ask the tester to extract a behavior checklist from the issue body and comments once.

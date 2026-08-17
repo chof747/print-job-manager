@@ -5,6 +5,14 @@ A managing app that allows planning of 3d printing jobs based on projects and a 
 
 Sandcastle can pick up GitHub issues and implement them in an isolated worktree using the ralph-loop instructions in `.sandcastle/`.
 
+GitHub writes use the `gh` CLI inside the sandbox. Make sure `.sandcastle/.env` contains a `GH_TOKEN` with repository write access; the sandbox runs `gh auth setup-git` so `git push` can authenticate.
+
+Build the local Sandcastle Docker image after changing `.sandcastle/Dockerfile`:
+
+```sh
+npm run sandcastle:docker:build
+```
+
 ### Start A New Build
 
 Run the next open issue labeled `ready-for-agent`:
