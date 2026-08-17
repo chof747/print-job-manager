@@ -7,6 +7,10 @@
     "doc": "docs"
   },
   "scripts": {
+    "check:backend": "python3 -m pytest backend/tests -q",
+    "check:frontend": "vitest run frontend/",
+    "dev:backend": "python3 -m uvicorn backend.app.main:app --reload",
+    "dev:frontend": "vite frontend",
     "sandcastle": "tsx --env-file=.sandcastle/.env .sandcastle/main.mts",
     "sandcastle:docker": "SANDCASTLE_SANDBOX=docker tsx --env-file=.sandcastle/.env .sandcastle/main.mts",
     "sandcastle:dry-run": "SANDCASTLE_DRY_RUN=true tsx --env-file=.sandcastle/.env .sandcastle/main.mts",
@@ -27,8 +31,17 @@
   "homepage": "https://github.com/chof747/print-job-manager#readme",
   "devDependencies": {
     "@ai-hero/sandcastle": "^0.12.0",
+    "@testing-library/jest-dom": "^7.0.1",
+    "@testing-library/react": "^16.3.2",
     "@types/node": "^26.2.0",
+    "@types/react": "^19.2.18",
+    "@types/react-dom": "^19.2.4",
+    "jsdom": "^30.0.1",
+    "react": "^19.2.8",
+    "react-dom": "^19.2.8",
     "tsx": "^4.23.5",
-    "typescript": "^7.0.2"
+    "typescript": "^7.0.2",
+    "vite": "^8.2.1",
+    "vitest": "^4.1.10"
   }
 }
