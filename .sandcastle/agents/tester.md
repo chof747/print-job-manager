@@ -39,7 +39,30 @@ Respect the accepted MVP technology stack in `docs/TECH_STACK.md`:
 - Frontend unit/component tests must use Vitest and React Testing Library under `frontend/tests/**`.
 - Frontend critical-flow tests may use Playwright under `frontend/e2e/**`.
 
-Do not write backend behavior tests with Node's `node:test` runner or JavaScript test files under `backend/tests/`. If a backend behavior involves an npm convenience script, write a pytest test that runs the npm command as a bounded subprocess.
+Do not write backend behavior tests with Node's `node:test` runner or JavaScript test files under `backend/tests/`.
+
+## Test Appropriateness
+
+Prefer committed tests for product/runtime behavior, public API contracts, validation rules, and UI rendering behavior.
+
+Do not write committed tests that invoke recursive check commands, package-manager install commands, dev servers, watchers, or the same test command that is currently running.
+
+Forbidden in committed tests:
+
+- `npm run check:*`
+- `npm test`
+- `pytest`
+- `vitest`
+- `npm install`
+- `pip install`
+- `npm run dev:*`
+- `vite`
+- `uvicorn`
+- long-running server/watch commands
+
+For acceptance criteria about developer commands existing, use static assertions instead of executing the commands. For example, parse `package.json` and assert that expected script keys exist and have the intended command shape.
+
+For acceptance criteria about local dev servers starting, do not create committed automated tests unless the issue explicitly requests that integration test. Verify startup with a bounded smoke command during the run and put the manual verification steps in the final QA checklist.
 
 ## Timeouts And Cleanup
 

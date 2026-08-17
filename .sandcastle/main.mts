@@ -159,7 +159,12 @@ Follow the project context in docs/CONTEXT.md, docs/TECH_STACK.md, and docs/arch
 Keep changes minimal and pragmatic.
 Do not directly implement production code or write tests as the orchestrator.
 Coordinate the tester, coder, reviewer, and handover roles according to the Ralph Loop Instructions.
-When the task is complete, output <promise>COMPLETE</promise>.`;
+
+Completion gate:
+
+Do not output <promise>COMPLETE</promise> after implementation/checks only. You may output <promise>COMPLETE</promise> only after the finalization flow is complete: final QA checklist gathered, final review completed, all AFK findings fixed, changes committed, branch pushed, PR created, PR body includes Closes #${issue.number} and the QA checklist, handover comment posted on the PR, issue labels updated, and any HILT findings documented on the PR.
+
+If you cannot create the PR or update GitHub, do not output <promise>COMPLETE</promise>. Report the blocker instead.`;
 
 const buildResumePrompt = (issue: GitHubIssue) => `Work in this existing preserved Sandcastle worktree as the ralph-loop orchestrator.
 
@@ -187,8 +192,26 @@ Before continuing implementation, read and follow these files when present:
 
 If docs/TECH_STACK.md is not present in this older worktree, use the accepted stack from issue #31: Python/FastAPI backend, pytest backend tests, React/Vite/TypeScript frontend, Vitest/React Testing Library frontend tests, and Playwright only for critical flows.
 
+If .sandcastle/agents/tester.md is not present in this older worktree, use this fallback test-appropriateness rule: committed tests must not invoke recursive check commands, package-manager install commands, dev servers, watchers, or the same test command currently running. Replace such tests with static assertions, such as parsing package.json for expected script keys and command shapes. Verify dev-server startup with bounded smoke commands during the run and include those steps in the final QA checklist instead of committing server-startup tests.
+
 Do not inline or repeat instruction files in your responses. Keep orchestrator messages concise.
 Use per-turn ownership guard snapshots, not git stash snapshots or --base checks.
+
+Current remediation instruction:
+
+If the existing worktree contains committed or uncommitted tests that run npm run check:*, npm run dev:*, pytest, vitest, pip install, npm install, vite, uvicorn, or long-running server/watch commands, treat those tests as invalid tester output. Route the fix to the tester: replace them with static assertions for developer command existence/shape, and move dev-server startup verification into the final QA checklist.
+
+Resume finalization contract:
+
+- Do not treat implementation/checks as complete.
+- Before final completion, obtain or construct a final manual QA checklist for the PR body.
+- Run or summarize final review status. Fix all AFK findings before PR creation. HILT findings do not block PR creation, but require a draft PR and a separate HILT findings PR comment.
+- Commit once with a concise issue-based message.
+- Push the current branch.
+- Create a PR whose body includes Closes #${issue.number}, implemented behavior summary, automated verification, and the full manual QA checklist.
+- Post a separate handover PR comment.
+- Remove ready-for-agent from the issue.
+- Add ready-for-qa when no HILT findings remain, or needs-info when HILT findings remain. Create only those labels if missing.
 
 Issue body:
 ${issue.body || "(empty)"}
@@ -200,7 +223,11 @@ ${
     : "(none)"
 }
 
-When the task is complete, output <promise>COMPLETE</promise>.`;
+Completion gate:
+
+Do not output <promise>COMPLETE</promise> after implementation/checks only. You may output <promise>COMPLETE</promise> only after the finalization flow is complete: final QA checklist gathered, final review completed, all AFK findings fixed, changes committed, branch pushed, PR created, PR body includes Closes #${issue.number} and the QA checklist, handover comment posted on the PR, issue labels updated, and any HILT findings documented on the PR.
+
+If you cannot create the PR or update GitHub, do not output <promise>COMPLETE</promise>. Report the blocker instead.`;
 
 const useDockerSandbox = process.env.SANDCASTLE_SANDBOX === "docker";
 

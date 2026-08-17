@@ -75,7 +75,26 @@ The accepted MVP stack is documented in `docs/TECH_STACK.md` and must be respect
 - Frontend unit/component tests use Vitest and React Testing Library under `frontend/tests/**`.
 - Frontend critical flows use Playwright under `frontend/e2e/**`.
 
-Do not allow backend behavior tests written with Node's `node:test` runner. If a backend test needs to exercise an npm convenience script, the pytest test may spawn that command as a subprocess, but the test itself must still be pytest.
+Do not allow backend behavior tests written with Node's `node:test` runner.
+
+## Test Appropriateness Gate
+
+Before accepting a tester RED slice, reject it if the committed test shells out to recursive check commands, package-manager install commands, dev servers, watchers, or the same test command that is currently running.
+
+Forbidden in committed tests:
+
+- `npm run check:*`
+- `npm test`
+- `pytest`
+- `vitest`
+- `npm install`
+- `pip install`
+- `npm run dev:*`
+- `vite`
+- `uvicorn`
+- long-running server/watch commands
+
+For developer-command acceptance criteria, require static assertions such as parsing `package.json` for expected script keys and command shapes. For local dev-server startup, use bounded smoke verification during the run and put the steps in the final QA checklist instead of committing server-startup tests, unless the issue explicitly requests those integration tests.
 
 ## Command Timeouts And Process Cleanup
 

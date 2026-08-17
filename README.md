@@ -19,7 +19,9 @@ Run a specific issue:
 SANDCASTLE_ISSUE_NUMBER=37 npm run sandcastle:docker
 ```
 
-By default, the runner allows up to `5` agent iterations and stops earlier when the orchestrator outputs `<promise>COMPLETE</promise>`. Override this for larger issues:
+By default, the runner allows up to `5` agent iterations and stops earlier when the orchestrator outputs `<promise>COMPLETE</promise>`. In this repo, `COMPLETE` means the PR flow is done: QA checklist gathered, final review handled, changes committed and pushed, PR created, handover comment posted, and issue labels updated.
+
+Override the iteration limit for larger issues:
 
 ```sh
 SANDCASTLE_ISSUE_NUMBER=37 SANDCASTLE_MAX_ITERATIONS=10 npm run sandcastle:docker
