@@ -1,7 +1,6 @@
-type RuntimeConfig = {
+export type RuntimeConfig = {
   apiBaseUrl: string;
 };
-
 
 export async function loadRuntimeConfig(): Promise<RuntimeConfig> {
   const response = await fetch("/runtime-config.json");

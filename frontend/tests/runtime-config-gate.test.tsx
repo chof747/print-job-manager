@@ -1,7 +1,5 @@
 import { render, screen } from "@testing-library/react";
-import { describe, expect, it, vi } from "vitest";
-
-import { RuntimeConfigGate } from "../src/runtime-config-gate";
+import { afterEach, describe, expect, it, vi } from "vitest";
 
 
 const { loadRuntimeConfig } = vi.hoisted(() => ({
@@ -14,8 +12,20 @@ vi.mock("../src/runtime-config", () => ({
 }));
 
 
+async function importRuntimeConfigGate() {
+  return import("../src/runtime-config-gate");
+}
+
+
 describe("RuntimeConfigGate", () => {
-  it("does not render app content until runtime config has loaded", () => {
+  afterEach(() => {
+    vi.resetAllMocks();
+    vi.resetModules();
+  });
+
+  it("does not render app content until runtime config has loaded", async () => {
+    const { RuntimeConfigGate } = await importRuntimeConfigGate();
+
     loadRuntimeConfig.mockReturnValue(new Promise(() => undefined));
 
     render(
@@ -28,6 +38,8 @@ describe("RuntimeConfigGate", () => {
   });
 
   it("shows a startup error message when runtime config loading fails", async () => {
+    const { RuntimeConfigGate } = await importRuntimeConfigGate();
+
     loadRuntimeConfig.mockRejectedValue(new Error("Failed to load runtime config: 500"));
 
     render(

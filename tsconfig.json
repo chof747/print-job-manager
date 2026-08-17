@@ -5,9 +5,10 @@
     "module": "ESNext",
     "moduleResolution": "Bundler",
     "jsx": "react-jsx",
+    "noEmit": true,
     "esModuleInterop": true,
     "allowSyntheticDefaultImports": true,
     "types": ["vitest/globals"]
   },
-  "include": ["frontend/tests/**/*", "vitest.config.ts"]
+  "include": ["frontend/src/**/*", "frontend/tests/**/*", "vitest.config.mts", "frontend/vite.config.mts"]
 }

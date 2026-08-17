@@ -21,14 +21,18 @@ vi.mock("../src/backend-health", () => ({
 }));
 
 
-afterEach(() => {
+afterEach(async () => {
   cleanup();
   vi.resetAllMocks();
+
+  await new Promise((resolve) => {
+    window.setTimeout(resolve, 0);
+  });
 });
 
 
 describe("App", () => {
-  it("shows backend health after loading runtime config", async () => {
+  it("shows the runtime-configured API base URL after loading runtime config", async () => {
     loadRuntimeConfig.mockResolvedValue({
       apiBaseUrl: "http://localhost:8000/api/v1",
     });
@@ -43,7 +47,7 @@ describe("App", () => {
     render(<App />);
 
     expect(await screen.findByText("Backend app: print-job-manager")).toBeInTheDocument();
-    expect(await screen.findByText("API base URL: /api/v1")).toBeInTheDocument();
+    expect(await screen.findByText("API base URL: http://localhost:8000/api/v1")).toBeInTheDocument();
     expect(await screen.findByText("Backend status: ok")).toBeInTheDocument();
   });
 
