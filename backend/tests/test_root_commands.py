@@ -11,6 +11,17 @@ def test_root_backend_dev_command_declares_a_static_uvicorn_entrypoint(package_j
     ), "dev:backend must not install dependencies; dependency setup belongs outside the repo command"
 
 
+def test_root_backend_dev_command_runs_uvicorn_through_uv_from_the_repo_root(package_json: dict) -> None:
+    script = package_json["scripts"].get("dev:backend")
+
+    assert script, "package.json must define a dev:backend root convenience command"
+    assert "uv run" in script, "dev:backend should execute uvicorn through uv so the backend pyproject contract owns dependency resolution"
+    assert "backend" in script, "dev:backend should explicitly target the backend project when launched from the repo root"
+    assert (
+        "python3 -m uvicorn" not in script
+    ), "dev:backend should not bypass uv by invoking uvicorn directly through the system Python"
+
+
 def test_root_backend_check_command_declares_a_static_pytest_flow(package_json: dict) -> None:
     script = package_json["scripts"].get("check:backend")
 
@@ -22,6 +33,17 @@ def test_root_backend_check_command_declares_a_static_pytest_flow(package_json: 
     assert (
         "npm install" not in script
     ), "check:backend must not install dependencies; dependency setup belongs outside the repo check command"
+
+
+def test_root_backend_check_command_runs_pytest_through_uv_from_the_repo_root(package_json: dict) -> None:
+    script = package_json["scripts"].get("check:backend")
+
+    assert script, "package.json must define a check:backend root convenience command"
+    assert "uv run" in script, "check:backend should execute pytest through uv so the backend pyproject contract owns dependency resolution"
+    assert "backend" in script, "check:backend should explicitly target the backend project when launched from the repo root"
+    assert (
+        "python3 -m pytest" not in script
+    ), "check:backend should not bypass uv by invoking pytest directly through the system Python"
 
 
 def test_root_frontend_dev_command_declares_a_static_vite_flow(package_json: dict) -> None:
