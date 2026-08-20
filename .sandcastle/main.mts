@@ -313,7 +313,7 @@ await run({
                 ? [
                     {
                       command:
-                        "python3 -m venv /tmp/sandcastle-python && . /tmp/sandcastle-python/bin/activate && if [ -f backend/requirements.txt ]; then python -m pip install -r backend/requirements.txt; fi && if [ -f backend/tests/requirements.txt ]; then python -m pip install -r backend/tests/requirements.txt; fi && python -m pytest --version && python -c 'import fastapi, uvicorn'",
+                        "python3 -m venv /tmp/sandcastle-python && . /tmp/sandcastle-python/bin/activate && if [ -f backend/requirements.txt ]; then python -m pip install -r backend/requirements.txt && python -c 'import fastapi, uvicorn'; fi && if [ -f backend/tests/requirements.txt ]; then python -m pip install -r backend/tests/requirements.txt && python -m pytest --version; fi",
                     },
                   ]
                 : []),
