@@ -307,7 +307,7 @@ await run({
               },
               {
                 command:
-                  "python3 -m pip --version && python3 -m venv /tmp/sandcastle-venv-check && rm -rf /tmp/sandcastle-venv-check && node --version && npm --version && gh --version",
+                  "python3 -m pip --version && python3 -m venv /tmp/sandcastle-venv-check && rm -rf /tmp/sandcastle-venv-check && uv --version && node --version && npm --version && gh --version",
               },
               ...(installProjectDeps
                 ? [
