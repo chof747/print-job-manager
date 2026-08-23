@@ -377,7 +377,7 @@ if (process.env.SANDCASTLE_DRY_RUN === "true") {
 
 try {
   await run({
-    agent: opencode("openai/gpt-5.4"),
+    agent: opencode("openai/gpt-5.6-terra"),
     branchStrategy,
     ...(existingWorktreePath ? { cwd: existingWorktreePath } : {}),
     idleTimeoutSeconds,
