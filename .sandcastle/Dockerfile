@@ -30,7 +30,7 @@ ARG AGENT_GID=1000
 RUN groupmod -o -g $AGENT_GID node \
   && usermod -o -u $AGENT_UID -g $AGENT_GID -d /home/agent -m -l agent node
 
-RUN npm install -g opencode-ai@latest
+RUN npm install -g opencode-ai@latest pnpm@latest
 
 USER ${AGENT_UID}:${AGENT_GID}
 

@@ -33,7 +33,7 @@ Normal Sandcastle logs are human-readable. Set `SANDCASTLE_LOG_VERBOSE=true` onl
 
 The sandbox resolves project-declared backend dependencies through `uv` before the agent starts, so agents can verify backend code without bootstrapping tooling themselves. Set `SANDCASTLE_INSTALL_PROJECT_DEPS=false` to skip this setup.
 
-The sandbox also installs Node dependencies before the agent starts, so frontend tools like Vitest are available on `PATH`. Set `SANDCASTLE_INSTALL_NODE_DEPS=false` to skip this setup.
+The sandbox also installs Node dependencies before the agent starts, so frontend tools like Vitest are available on `PATH`. It uses pnpm through Corepack when `pnpm-lock.yaml` exists, otherwise npm. Set `SANDCASTLE_INSTALL_NODE_DEPS=false` to skip this setup.
 
 Build the local Sandcastle Docker image after changing `.sandcastle/Dockerfile`:
 

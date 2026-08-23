@@ -394,7 +394,7 @@ try {
                 },
                 {
                   command:
-                    "python3 -m pip --version && python3 -m venv /tmp/sandcastle-venv-check && rm -rf /tmp/sandcastle-venv-check && uv --version && node --version && npm --version && gh --version",
+                    "python3 -m pip --version && python3 -m venv /tmp/sandcastle-venv-check && rm -rf /tmp/sandcastle-venv-check && uv --version && node --version && npm --version && pnpm --version && gh --version",
                 },
                 ...(installProjectDeps
                   ? [
@@ -404,14 +404,14 @@ try {
                       },
                     ]
                   : []),
-                ...(installNodeDeps
-                  ? [
-                      {
-                        command:
-                          "if [ -f package.json ]; then if [ -f package-lock.json ]; then npm ci; else npm install; fi; fi && if [ -f package.json ]; then npm exec vitest -- --version; fi",
-                      },
-                    ]
-                  : []),
+              ...(installNodeDeps
+                ? [
+                    {
+                      command:
+                        "if [ -f package.json ]; then if [ -f pnpm-lock.yaml ]; then pnpm install --frozen-lockfile && pnpm exec vitest --version; elif [ -f package-lock.json ]; then npm ci && npm exec vitest -- --version; else npm install && npm exec vitest -- --version; fi; fi",
+                    },
+                  ]
+                : []),
               ],
             },
           },
