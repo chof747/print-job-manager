@@ -1,6 +1,28 @@
 # print-job-manager
 A managing app that allows planning of 3d printing jobs based on projects and a prioritised list of models
 
+## Backend Setup
+
+The backend uses `uv` with `backend/pyproject.toml` and `backend/uv.lock`.
+
+Sync backend runtime and test dependencies from a clean checkout:
+
+```sh
+uv sync --project backend --group test
+```
+
+Run the backend test suite from the repo root:
+
+```sh
+npm run check:backend
+```
+
+Start the FastAPI backend dev server from the repo root:
+
+```sh
+npm run dev:backend
+```
+
 ## Sandcastle AFK Builds
 
 Sandcastle can pick up GitHub issues and implement them in an isolated worktree using the ralph-loop instructions in `.sandcastle/`.
@@ -9,7 +31,7 @@ GitHub writes use the `gh` CLI inside the sandbox. Make sure `.sandcastle/.env` 
 
 Normal Sandcastle logs are human-readable. Set `SANDCASTLE_LOG_VERBOSE=true` only when debugging provider stream issues; it prints raw OpenCode JSON events and is intentionally noisy.
 
-The sandbox installs project-declared backend dependencies into a temporary venv before the agent starts, so agents can verify backend code without bootstrapping tooling themselves. Set `SANDCASTLE_INSTALL_PROJECT_DEPS=false` to skip this setup.
+The sandbox resolves project-declared backend dependencies through `uv` before the agent starts, so agents can verify backend code without bootstrapping tooling themselves. Set `SANDCASTLE_INSTALL_PROJECT_DEPS=false` to skip this setup.
 
 The sandbox also installs Node dependencies before the agent starts, so frontend tools like Vitest are available on `PATH`. Set `SANDCASTLE_INSTALL_NODE_DEPS=false` to skip this setup.
 
