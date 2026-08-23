@@ -2,6 +2,7 @@ import { run, opencode } from "@ai-hero/sandcastle";
 import { docker } from "@ai-hero/sandcastle/sandboxes/docker";
 import { noSandbox } from "@ai-hero/sandcastle/sandboxes/no-sandbox";
 import { execFileSync } from "node:child_process";
+import { isAbsolute, relative, resolve, sep } from "node:path";
 
 type GitHubIssue = {
   number: number;
@@ -130,6 +131,86 @@ const getIssueBranchPrefix = (issue: GitHubIssue) => {
 const getIssueBranchName = (issue: GitHubIssue) =>
   `${getIssueBranchPrefix(issue)}/issue-${issue.number}-${slugify(issue.title)}`;
 
+type Worktree = {
+  path: string;
+  branch?: string;
+};
+
+const getWorktrees = (): Worktree[] =>
+  execFileSync("git", ["worktree", "list", "--porcelain"], { encoding: "utf8" })
+    .trim()
+    .split("\n\n")
+    .flatMap((entry) => {
+      const path = entry.match(/^worktree (.+)$/m)?.[1];
+      const branch = entry.match(/^branch refs\/heads\/(.+)$/m)?.[1];
+
+      return path ? [{ path, branch }] : [];
+    });
+
+const isSandcastleWorktree = (worktreePath: string) => {
+  const sandcastleWorktreeRoot = resolve(".sandcastle/worktrees");
+  const pathFromRoot = relative(sandcastleWorktreeRoot, resolve(worktreePath));
+
+  return (
+    pathFromRoot.length > 0 &&
+    !pathFromRoot.startsWith(`..${sep}`) &&
+    pathFromRoot !== ".." &&
+    !isAbsolute(pathFromRoot)
+  );
+};
+
+const getWorktreeBranch = (worktreePath: string) =>
+  getWorktrees().find((worktree) => resolve(worktree.path) === resolve(worktreePath))?.branch;
+
+const removeFinalizedWorktree = (issue: GitHubIssue, branch: string) => {
+  try {
+    const labels = gh([
+      "issue",
+      "view",
+      String(issue.number),
+      "--repo",
+      repo,
+      "--json",
+      "labels",
+      "--jq",
+      ".labels[].name",
+    ]).split("\n");
+    const finalized =
+      !labels.includes(readyLabel) &&
+      (labels.includes("ready-for-qa") || labels.includes("needs-info"));
+    const prNumber = gh([
+      "pr",
+      "list",
+      "--repo",
+      repo,
+      "--head",
+      branch,
+      "--state",
+      "all",
+      "--json",
+      "number",
+      "--jq",
+      ".[0].number",
+    ]);
+
+    if (!finalized || !prNumber) {
+      return;
+    }
+
+    const worktree = getWorktrees().find((candidate) => candidate.branch === branch);
+
+    if (!worktree || !isSandcastleWorktree(worktree.path)) {
+      return;
+    }
+
+    execFileSync("git", ["worktree", "remove", worktree.path], { stdio: "inherit" });
+    console.log(`[sandcastle] Removed finalized worktree for issue #${issue.number}.`);
+  } catch (error) {
+    // A successful PR must remain usable even if local cleanup cannot run.
+    console.warn(`[sandcastle] Could not remove finalized worktree: ${String(error)}`);
+  }
+};
+
 const buildIssuePrompt = (issue: GitHubIssue) => `Work in this repository as the ralph-loop orchestrator.
 
 Implement GitHub issue #${issue.number}: ${issue.title}
@@ -165,7 +246,7 @@ Coordinate the tester, coder, reviewer, and handover roles according to the Ralp
 
 Completion gate:
 
-Do not output <promise>COMPLETE</promise> after implementation/checks only. You may output <promise>COMPLETE</promise> only after the finalization flow is complete: final QA checklist gathered, final review completed, all AFK findings fixed, changes committed, branch pushed, PR created, PR body includes Closes #${issue.number} and the QA checklist, handover comment posted on the PR, issue labels updated, and any HILT findings documented on the PR.
+Do not output <promise>COMPLETE</promise> after implementation/checks only. You may output <promise>COMPLETE</promise> only after the finalization flow is complete: final QA checklist gathered, final review completed, all AFK findings fixed, changes committed, branch pushed, PR created, PR body includes Closes #${issue.number} and the QA checklist, handover comment posted on the PR, issue labels updated, and any HILT findings documented on the PR. The launcher performs guarded Sandcastle-worktree cleanup after this finalization.
 
 If you cannot create the PR or update GitHub, do not output <promise>COMPLETE</promise>. Report the blocker instead.`;
 
@@ -232,7 +313,7 @@ ${
 
 Completion gate:
 
-Do not output <promise>COMPLETE</promise> after implementation/checks only. You may output <promise>COMPLETE</promise> only after the finalization flow is complete: final QA checklist gathered, final review completed, all AFK findings fixed, changes committed, branch pushed, PR created, PR body includes Closes #${issue.number} and the QA checklist, handover comment posted on the PR, issue labels updated, and any HILT findings documented on the PR.
+Do not output <promise>COMPLETE</promise> after implementation/checks only. You may output <promise>COMPLETE</promise> only after the finalization flow is complete: final QA checklist gathered, final review completed, all AFK findings fixed, changes committed, branch pushed, PR created, PR body includes Closes #${issue.number} and the QA checklist, handover comment posted on the PR, issue labels updated, and any HILT findings documented on the PR. The launcher performs guarded Sandcastle-worktree cleanup after this finalization.
 
 If you cannot create the PR or update GitHub, do not output <promise>COMPLETE</promise>. Report the blocker instead.`;
 
@@ -283,56 +364,67 @@ const branchStrategy = selectedIssue
     ? { type: "head" as const }
     : { type: "branch" as const, branch: getIssueBranchName(selectedIssue) }
   : { type: "merge-to-head" as const };
+const issueBranch = selectedIssue
+  ? existingWorktreePath
+    ? getWorktreeBranch(existingWorktreePath)
+    : getIssueBranchName(selectedIssue)
+  : undefined;
 
 if (process.env.SANDCASTLE_DRY_RUN === "true") {
   console.log(prompt);
   process.exit(0);
 }
 
-await run({
-  agent: opencode("openai/gpt-5.4"),
-  branchStrategy,
-  ...(existingWorktreePath ? { cwd: existingWorktreePath } : {}),
-  idleTimeoutSeconds,
-  maxIterations,
-  sandbox,
-  ...(useDockerSandbox
-    ? {
-        hooks: {
-          sandbox: {
-            onSandboxReady: [
-              {
-                command:
-                  "mkdir -p /tmp/opencode-state /tmp/opencode-cache /home/agent/.local/share/opencode/log && cp /home/agent/host-auth/auth.json /home/agent/.local/share/opencode/auth.json && gh auth setup-git",
-              },
-              {
-                command:
-                  "python3 -m pip --version && python3 -m venv /tmp/sandcastle-venv-check && rm -rf /tmp/sandcastle-venv-check && uv --version && node --version && npm --version && gh --version",
-              },
-              ...(installProjectDeps
-                ? [
-                    {
-                      command:
-                        "python3 -m venv /tmp/sandcastle-python && . /tmp/sandcastle-python/bin/activate && if [ -f backend/requirements.txt ]; then python -m pip install -r backend/requirements.txt && python -c 'import fastapi, uvicorn'; fi && if [ -f backend/tests/requirements.txt ]; then python -m pip install -r backend/tests/requirements.txt && python -m pytest --version; fi",
-                    },
-                  ]
-                : []),
-              ...(installNodeDeps
-                ? [
-                    {
-                      command:
-                        "if [ -f package.json ]; then if [ -f package-lock.json ]; then npm ci; else npm install; fi; fi && if [ -f package.json ]; then npm exec vitest -- --version; fi",
-                    },
-                  ]
-                : []),
-            ],
+try {
+  await run({
+    agent: opencode("openai/gpt-5.4"),
+    branchStrategy,
+    ...(existingWorktreePath ? { cwd: existingWorktreePath } : {}),
+    idleTimeoutSeconds,
+    maxIterations,
+    sandbox,
+    ...(useDockerSandbox
+      ? {
+          hooks: {
+            sandbox: {
+              onSandboxReady: [
+                {
+                  command:
+                    "mkdir -p /tmp/opencode-state /tmp/opencode-cache /home/agent/.local/share/opencode/log && cp /home/agent/host-auth/auth.json /home/agent/.local/share/opencode/auth.json && gh auth setup-git",
+                },
+                {
+                  command:
+                    "python3 -m pip --version && python3 -m venv /tmp/sandcastle-venv-check && rm -rf /tmp/sandcastle-venv-check && uv --version && node --version && npm --version && gh --version",
+                },
+                ...(installProjectDeps
+                  ? [
+                      {
+                        command:
+                          "python3 -m venv /tmp/sandcastle-python && . /tmp/sandcastle-python/bin/activate && if [ -f backend/requirements.txt ]; then python -m pip install -r backend/requirements.txt && python -c 'import fastapi, uvicorn'; fi && if [ -f backend/tests/requirements.txt ]; then python -m pip install -r backend/tests/requirements.txt && python -m pytest --version; fi",
+                      },
+                    ]
+                  : []),
+                ...(installNodeDeps
+                  ? [
+                      {
+                        command:
+                          "if [ -f package.json ]; then if [ -f package-lock.json ]; then npm ci; else npm install; fi; fi && if [ -f package.json ]; then npm exec vitest -- --version; fi",
+                      },
+                    ]
+                  : []),
+              ],
+            },
           },
-        },
-      }
-    : {}),
-  prompt,
-  logging: {
-    type: "stdout",
-    verbose: logVerbose,
-  },
-});
+        }
+      : {}),
+    prompt,
+    logging: {
+      type: "stdout",
+      verbose: logVerbose,
+    },
+  });
+} finally {
+  if (selectedIssue && issueBranch) {
+    removeFinalizedWorktree(selectedIssue, issueBranch);
+  }
+}

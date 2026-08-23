@@ -23,7 +23,7 @@ Do not copy those skill instructions into outputs. Invoke or refer to the skills
 - Tester owns behavior extraction, RED tests, GREEN verification, final completion assessment, and the manual QA checklist.
 - Coder owns only production implementation needed to make tester-owned RED tests pass.
 - Reviewer reports findings only and never edits files.
-- Orchestrator delegates, runs mechanical checks, commits, pushes, creates the PR, labels the issue, comments on the PR, and cleans only the Sandcastle-created worktree.
+- Orchestrator delegates, runs mechanical checks, commits, pushes, creates the PR, labels the issue, and comments on the PR. The launcher removes only the Sandcastle-created worktree after finalization.
 
 ## File Ownership
 
@@ -178,7 +178,7 @@ After all AFK work is complete:
 10. If no HILT findings exist, add `ready-for-qa` to the issue.
 11. If HILT findings exist, add `needs-info` to the issue.
 12. You may create exactly `ready-for-qa` and `needs-info` labels if they are missing. Do not invent other labels.
-13. Clean only the Sandcastle-created worktree. If cleanup fails after PR creation, report it but do not fail the implementation.
+13. The launcher removes only the Sandcastle-created worktree after PR creation and final issue labels. If cleanup fails, it reports the failure without failing the implementation.
 
 ## PR Shape
 
