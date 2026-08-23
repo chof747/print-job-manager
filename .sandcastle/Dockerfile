@@ -1,5 +1,7 @@
 FROM node:22-bookworm
 
+COPY --from=ghcr.io/astral-sh/uv:0.8.13 /uv /uvx /usr/local/bin/
+
 RUN apt-get update && apt-get install -y \
   ca-certificates \
   git \

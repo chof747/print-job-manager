@@ -94,4 +94,4 @@ npm run sandcastle:docker
 
 This resumes the worktree state, not the previous model session memory. The orchestrator will inspect the current files and continue from the next unfinished behavior.
 
-Do not remove the preserved worktree before resuming. After the PR is created successfully, Sandcastle should clean up its own worktree.
+Do not remove the preserved worktree before resuming. Resume mode uses an existing user-specified worktree, so it is preserved by default. Remove it manually only after it is clean and you are done with it.
