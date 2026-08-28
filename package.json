@@ -7,6 +7,7 @@
     "doc": "docs"
   },
   "scripts": {
+    "update": "uv sync --project backend --group test && pnpm sync",
     "check:backend": "uv run --project backend pytest backend/tests -q",
     "check:frontend": "vitest run frontend/",
     "dev:backend": "uv run --project backend uvicorn backend.app.main:app --reload",
