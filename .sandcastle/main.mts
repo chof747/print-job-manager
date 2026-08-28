@@ -2,6 +2,7 @@ import { run, opencode } from "@ai-hero/sandcastle";
 import { docker } from "@ai-hero/sandcastle/sandboxes/docker";
 import { noSandbox } from "@ai-hero/sandcastle/sandboxes/no-sandbox";
 import { execFileSync } from "node:child_process";
+import { mkdirSync } from "node:fs";
 import { isAbsolute, relative, resolve, sep } from "node:path";
 
 type GitHubIssue = {
@@ -23,6 +24,7 @@ const maxIterations = Number(process.env.SANDCASTLE_MAX_ITERATIONS ?? "5");
 const logVerbose = process.env.SANDCASTLE_LOG_VERBOSE === "true";
 const installProjectDeps = process.env.SANDCASTLE_INSTALL_PROJECT_DEPS !== "false";
 const installNodeDeps = process.env.SANDCASTLE_INSTALL_NODE_DEPS !== "false";
+const dockerNodeModulesPath = resolve(".sandcastle/tmp/docker-node_modules");
 const minDockerMemoryBytes = Number(
   process.env.SANDCASTLE_MIN_DOCKER_MEMORY_BYTES ?? String(4 * 1024 * 1024 * 1024),
 );
@@ -276,14 +278,14 @@ Before continuing implementation, read and follow these files when present:
 
 If docs/TECH_STACK.md is not present in this older worktree, use the accepted stack from issue #31: Python/FastAPI backend, pytest backend tests, React/Vite/TypeScript frontend, Vitest/React Testing Library frontend tests, and Playwright only for critical flows.
 
-Sandbox tooling rule: do not bootstrap pip, Python venv support, Node, npm, system packages, or OS package managers. Do not download installer scripts such as get-pip.py. If required sandbox tooling is missing, stop and report an environment blocker instead of mutating user-local tooling or project files to compensate.
+Sandbox tooling rule: do not bootstrap pip, Python venv support, Node, npm, system packages, or OS package managers. Do not download installer scripts such as get-pip.py. If required sandbox tooling is missing, stop and report an environment blocker instead of mutating user-local tooling or project files to compensate. The narrow exception is an issue-required project dependency: use the committed package manager to add a named dependency, update and commit its manifest and lockfile together, and state the justification in handover. For Python, use uv add/uv lock rather than pip install.
 
 GitHub write rule: use the gh CLI for GitHub writes: git push, gh pr create, gh pr comment, and gh issue edit. Do not use separate GitHub MCP/tool calls for branch, PR, comment, or label writes during Sandcastle finalization. The sandbox configures gh auth setup-git so plain git push can authenticate through the GitHub CLI credential helper.
 
 If .sandcastle/agents/tester.md is not present in this older worktree, use this fallback test-appropriateness rule: committed tests must not invoke recursive check commands, package-manager install commands, dev servers, watchers, or the same test command currently running. Replace such tests with static assertions, such as parsing package.json for expected script keys and command shapes. Verify dev-server startup with bounded smoke commands during the run and include those steps in the final QA checklist instead of committing server-startup tests.
 
 Do not inline or repeat instruction files in your responses. Keep orchestrator messages concise.
-Use per-turn ownership guard snapshots, not git stash snapshots or --base checks.
+Use per-turn ownership guard snapshots, not git stash snapshots or --base checks. Run the ownership guard with tsx directly, not npx: tsx .sandcastle/scripts/check-agent-file-ownership.mts ...
 
 Current remediation instruction:
 
@@ -321,6 +323,7 @@ const useDockerSandbox = process.env.SANDCASTLE_SANDBOX === "docker";
 
 if (useDockerSandbox) {
   assertDockerHasEnoughMemory();
+  mkdirSync(dockerNodeModulesPath, { recursive: true });
 }
 
 const sandbox = useDockerSandbox
@@ -333,11 +336,24 @@ const sandbox = useDockerSandbox
         GH_TOKEN: process.env.GH_TOKEN ?? process.env.GITHUB_TOKEN ?? "",
         GITHUB_TOKEN: process.env.GITHUB_TOKEN ?? process.env.GH_TOKEN ?? "",
         PATH:
-          "/home/agent/workspace/node_modules/.bin:/tmp/sandcastle-python/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin",
-        XDG_STATE_HOME: "/tmp/opencode-state",
-        XDG_CACHE_HOME: "/tmp/opencode-cache",
+          "/home/agent/workspace/node_modules/.bin:/home/agent/workspace/.sandcastle/tmp/sandcastle-python/bin:/home/agent/workspace/.sandcastle/tmp/pnpm-home/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin",
+        TMPDIR: "/home/agent/workspace/.sandcastle/tmp/sandbox-tmp",
+        TMP: "/home/agent/workspace/.sandcastle/tmp/sandbox-tmp",
+        TEMP: "/home/agent/workspace/.sandcastle/tmp/sandbox-tmp",
+        XDG_CONFIG_HOME: "/home/agent/workspace/.sandcastle/tmp/xdg-config",
+        XDG_STATE_HOME: "/home/agent/workspace/.sandcastle/tmp/opencode-state",
+        XDG_CACHE_HOME: "/home/agent/workspace/.sandcastle/tmp/opencode-cache",
+        UV_CACHE_DIR: "/home/agent/workspace/.sandcastle/tmp/uv-cache",
+        NPM_CONFIG_CACHE: "/home/agent/workspace/.sandcastle/tmp/npm-cache",
+        PNPM_HOME: "/home/agent/workspace/.sandcastle/tmp/pnpm-home",
+        npm_config_store_dir: "/home/agent/workspace/.sandcastle/tmp/pnpm-store",
       },
       mounts: [
+        // Overlay the bind-mounted worktree so Linux native modules never replace host modules.
+        {
+          hostPath: dockerNodeModulesPath,
+          sandboxPath: "node_modules",
+        },
         {
           hostPath: "~/.local/share/opencode/auth.json",
           sandboxPath: "/home/agent/host-auth/auth.json",
@@ -390,11 +406,11 @@ try {
               onSandboxReady: [
                 {
                   command:
-                    "mkdir -p /tmp/opencode-state /tmp/opencode-cache /home/agent/.local/share/opencode/log && cp /home/agent/host-auth/auth.json /home/agent/.local/share/opencode/auth.json && gh auth setup-git",
+                    "mkdir -p .sandcastle/tmp/sandbox-tmp .sandcastle/tmp/xdg-config .sandcastle/tmp/opencode-state .sandcastle/tmp/opencode-cache .sandcastle/tmp/uv-cache .sandcastle/tmp/npm-cache .sandcastle/tmp/pnpm-home/bin .sandcastle/tmp/pnpm-store /home/agent/.local/share/opencode/log && cp /home/agent/host-auth/auth.json /home/agent/.local/share/opencode/auth.json && gh auth setup-git",
                 },
                 {
                   command:
-                    "python3 -m pip --version && python3 -m venv /tmp/sandcastle-venv-check && rm -rf /tmp/sandcastle-venv-check && uv --version && node --version && npm --version && pnpm --version && gh --version",
+                    "python3 -m pip --version && python3 -m venv .sandcastle/tmp/sandcastle-venv-check && rm -rf .sandcastle/tmp/sandcastle-venv-check && uv --version && node --version && npm --version && pnpm --version && tsx --version && gh --version",
                 },
                 ...(installProjectDeps
                   ? [
@@ -408,7 +424,7 @@ try {
                 ? [
                     {
                       command:
-                        "if [ -f package.json ]; then if [ -f pnpm-lock.yaml ]; then pnpm install --frozen-lockfile && pnpm exec vitest --version; elif [ -f package-lock.json ]; then npm ci && npm exec vitest -- --version; else npm install && npm exec vitest -- --version; fi; fi",
+                        "if [ -f package.json ]; then if [ -f package-lock.json ]; then npm ci && npm exec vitest -- --version; elif [ -f pnpm-lock.yaml ]; then pnpm install --frozen-lockfile --store-dir /home/agent/workspace/.sandcastle/tmp/pnpm-store && pnpm exec vitest --version; else npm install && npm exec vitest -- --version; fi; fi",
                     },
                   ]
                 : []),
