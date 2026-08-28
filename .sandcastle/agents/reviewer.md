@@ -10,6 +10,7 @@ Use `docs/TECH_STACK.md` as a standards source for technology, dependency, packa
 
 - Review the diff against the fixed point for the issue branch.
 - Use the `/code-review` skill's two-axis shape: Standards and Spec.
+- For every dependency change, verify it is required by the issue or accepted stack, is declared in the manifest, has a matching committed lockfile update, and is not a global/tooling bootstrap.
 - Classify every finding as `AFK` or `HILT`.
 - Recommend routing for `AFK` findings.
 

@@ -46,14 +46,16 @@ Use `.sandcastle/scripts/check-agent-file-ownership.mts` with a per-turn snapsho
 Before each sub-agent turn, run:
 
 ```sh
-npx tsx .sandcastle/scripts/check-agent-file-ownership.mts --role <tester|coder> --snapshot-out .sandcastle/tmp/<role>-before.json
+tsx .sandcastle/scripts/check-agent-file-ownership.mts --role <tester|coder> --snapshot-out .sandcastle/tmp/<role>-before.json
 ```
 
 After that sub-agent turn, run:
 
 ```sh
-npx tsx .sandcastle/scripts/check-agent-file-ownership.mts --role <tester|coder> --snapshot-in .sandcastle/tmp/<role>-before.json
+tsx .sandcastle/scripts/check-agent-file-ownership.mts --role <tester|coder> --snapshot-in .sandcastle/tmp/<role>-before.json
 ```
+
+Do not use `npx` for the ownership guard. `tsx` is provided by the Sandcastle Docker image so the guard can run without automatic package installation.
 
 If ownership or test-stack validation fails, treat the result as invalid and retry with stricter instructions. Do not revert arbitrary changes yourself.
 
@@ -96,6 +98,12 @@ Forbidden in committed tests:
 
 For developer-command acceptance criteria, require static assertions such as parsing `package.json` for expected script keys and command shapes. For local dev-server startup, use bounded smoke verification during the run and put the steps in the final QA checklist instead of committing server-startup tests, unless the issue explicitly requests those integration tests.
 
+Use root `package.json` check commands for frontend verification. The runner owns routine dependency installation, but an agent may add an issue-required project dependency with the repository's committed package manager. The agent must name the dependency and why it is needed, update the manifest and lockfile together, and include both in its handover. Do not install dependencies speculatively or to work around a missing tool.
+
+Package-manager selection is determined by committed lockfiles: use npm when `package-lock.json` exists; use pnpm only when `pnpm-lock.yaml` exists. In an npm project, use `npm install <named-package>` or `npm install --save-dev <named-package>` only to add an issue-required dependency. In a pnpm project, use the equivalent `pnpm add` command. Do not introduce or invoke pnpm in an npm-managed project. If an issue explicitly migrates to pnpm, it must commit its project-level `pnpm-workspace.yaml` build policy, including explicit approvals such as `allowBuilds: { esbuild: true }` when needed.
+
+For Python, `uv add` and `uv lock` are allowed only to add an issue-required dependency to `backend/pyproject.toml` and update `backend/uv.lock`. Do not use `pip install`.
+
 ## Command Timeouts And Process Cleanup
 
 Every sub-agent command that can run a server, watcher, dev command, E2E browser, or long-running subprocess must have an explicit timeout and must clean up the whole spawned process tree.
@@ -104,7 +112,7 @@ Do not run watchers or dev servers as open-ended verification commands. Start th
 
 ## Sandbox Tooling
 
-The Sandcastle Docker image owns interpreter and package-manager availability. Agents must not bootstrap `pip`, Python `venv` support, Node, npm, system packages, or OS package managers during implementation or verification.
+The Sandcastle Docker image owns interpreter and package-manager availability. Agents must not bootstrap `pip`, Python `venv` support, Node, npm, system packages, or OS package managers during implementation or verification. Project-local dependency additions through npm, pnpm, or uv are the narrow exception above.
 
 If required sandbox tooling is missing, stop without creating a PR and report an environment blocker. Do not download installer scripts, run `get-pip.py`, install package managers, or mutate user-local tooling to continue.
 
