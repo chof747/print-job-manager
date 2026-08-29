@@ -1,6 +1,7 @@
 import { readFileSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
+import tailwindcss from "@tailwindcss/vite";
 import { defineConfig } from "vite";
 
 type RuntimeConfig = {
@@ -19,6 +20,7 @@ function loadApiBaseUrl() {
 const apiBaseUrl = loadApiBaseUrl();
 
 export default defineConfig({
+  plugins: [tailwindcss()],
   server: apiBaseUrl
     ? {
         proxy: {

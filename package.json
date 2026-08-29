@@ -36,6 +36,7 @@
   "homepage": "https://github.com/chof747/print-job-manager#readme",
   "devDependencies": {
     "@ai-hero/sandcastle": "^0.12.0",
+    "@tailwindcss/vite": "^4.3.3",
     "@testing-library/jest-dom": "^7.0.1",
     "@testing-library/react": "^16.3.2",
     "@types/node": "^26.2.0",
@@ -44,6 +45,7 @@
     "jsdom": "^30.0.1",
     "react": "^19.2.8",
     "react-dom": "^19.2.8",
+    "tailwindcss": "^4.3.3",
     "tsx": "^4.23.5",
     "typescript": "^7.0.2",
     "vite": "^8.2.1",

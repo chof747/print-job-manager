@@ -16,7 +16,7 @@ export function App() {
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [importError, setImportError] = useState<string | null>(null);
   const [planningValues, setPlanningValues] = useState<Record<string, string>>({});
-  const { artifact, missingPlanningValues, jobs, createError, isImporting, importFile, create } = useJobImport(apiBaseUrl);
+  const { artifact, missingPlanningValues, jobs, createError, isCreated, isImporting, importFile, create } = useJobImport(apiBaseUrl);
 
   useEffect(() => {
     let isActive = true;
@@ -113,45 +113,61 @@ export function App() {
   const hasBlankPlanningValue = missingPlanningValues.some((value) => !planningValues[value]?.trim());
 
   return (
-    <div>
-      <div>{`Backend app: ${appName}`}</div>
-      <div>{`API base URL: ${apiBaseUrl}`}</div>
-      <div>{`Backend status: ${status}`}</div>
-      <label>
-        G-code file
-        <input
-          type="file"
-          accept=".gcode"
-          aria-label="G-code file"
-          disabled={isImporting}
-          onChange={(event) => void handleImportGcode(event.target.files?.[0])}
-        />
-      </label>
-      {isImporting && <p>Uploading G-code...</p>}
-      {importError && <p role="alert">{importError}</p>}
-      {artifact && missingPlanningValues.map((value) => (
-        <Fragment key={value}>
-          <p>{`${formatPlanningValueLabel(value)} is required.`}</p>
+    <main aria-label="Operations" className="min-h-screen bg-slate-950 text-slate-100">
+      <div className="mx-auto grid max-w-7xl grid-cols-1 gap-4 p-4 lg:grid-cols-2">
+        <section aria-labelledby="guided-import-heading" className="rounded-lg border border-slate-800 bg-slate-900 p-4">
+          <h1 id="guided-import-heading">Guided import</h1>
           <label>
-            {formatPlanningValueLabel(value)}
+            G-code file
             <input
-              value={planningValues[value] ?? ""}
-              onChange={(event) => setPlanningValues({ ...planningValues, [value]: event.target.value })}
+              type="file"
+              accept=".gcode"
+              aria-label="G-code file"
+              className="border border-slate-700 bg-slate-800 text-slate-100 focus-visible:ring-2 focus-visible:ring-cyan-400"
+              disabled={isImporting}
+              onChange={(event) => void handleImportGcode(event.target.files?.[0])}
             />
           </label>
-        </Fragment>
-      ))}
-      {artifact && (
-        <>
-          <button type="button" disabled={isImporting || hasBlankPlanningValue} onClick={() => void handleCreateJob()}>
-            Create job
-          </button>
-          {createError && <p>{createError}</p>}
-        </>
-      )}
-      {jobs.length > 0 && (
-        <section>
-          <h2>Active queue</h2>
+          {isImporting && (
+            <p role="status" aria-label="Uploading G-code" className="border border-cyan-800 bg-cyan-950 text-cyan-100">
+              Uploading G-code...
+            </p>
+          )}
+          {importError && <p role="alert" className="border border-rose-800 bg-rose-950 text-rose-100">{importError}</p>}
+          {artifact && missingPlanningValues.map((value) => (
+            <Fragment key={value}>
+              <p>{`${formatPlanningValueLabel(value)} is required.`}</p>
+              <label>
+                {formatPlanningValueLabel(value)}
+                <input
+                  className="border border-slate-700 bg-slate-800 text-slate-100 focus-visible:ring-2 focus-visible:ring-cyan-400"
+                  value={planningValues[value] ?? ""}
+                  onChange={(event) => setPlanningValues({ ...planningValues, [value]: event.target.value })}
+                />
+              </label>
+            </Fragment>
+          ))}
+          {artifact && (
+            <>
+              <button
+                type="button"
+                className="border border-slate-700 bg-slate-800 text-slate-100 focus-visible:ring-2 focus-visible:ring-cyan-400"
+                disabled={isImporting || hasBlankPlanningValue}
+                onClick={() => void handleCreateJob()}
+              >
+                Create job
+              </button>
+              {isCreated && (
+                <p role="status" aria-label="Job created" className="border border-emerald-800 bg-emerald-950 text-emerald-100">
+                  Job created
+                </p>
+              )}
+              {createError && <p role="alert" className="border border-rose-800 bg-rose-950 text-rose-100">{createError}</p>}
+            </>
+          )}
+        </section>
+        <section aria-labelledby="active-queue-heading" className="rounded-lg border border-slate-800 bg-slate-900 p-4">
+          <h2 id="active-queue-heading">Active queue</h2>
           {jobs.map((job) => (
             <div key={job.id}>
               <div>{job.executionData.artifactRef === artifact?.id ? artifact.filename : job.executionData.artifactRef}</div>
@@ -159,7 +175,12 @@ export function App() {
             </div>
           ))}
         </section>
-      )}
-    </div>
+        <aside aria-label="Backend runtime status" className="text-sm text-slate-400">
+          <div>{`Backend app: ${appName}`}</div>
+          <div>{`API base URL: ${apiBaseUrl}`}</div>
+          <div>{`Backend status: ${status}`}</div>
+        </aside>
+      </div>
+    </main>
   );
 }
