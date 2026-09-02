@@ -73,9 +73,9 @@ describe("frontend bootstrap", () => {
       </StrictMode>,
     );
 
-    expect(await screen.findByText("Backend app: print-job-manager")).toBeInTheDocument();
-    expect(screen.getByText("API base URL: http://localhost:8000/api/v1")).toBeInTheDocument();
-    expect(screen.getByText("Backend status: ok")).toBeInTheDocument();
+    expect(await screen.findByText("print-job-manager")).toBeInTheDocument();
+    expect(screen.getByText("http://localhost:8000/api/v1")).toBeInTheDocument();
+    expect(screen.getByText("ok")).toBeInTheDocument();
 
     rerender(
       <StrictMode>
@@ -87,7 +87,7 @@ describe("frontend bootstrap", () => {
 
     await waitFor(() => {
       expect(fetchBackendHealth).toHaveBeenCalledTimes(4);
-      expect(screen.getByText("Backend app: print-job-manager")).toBeInTheDocument();
+      expect(screen.getByText("print-job-manager")).toBeInTheDocument();
       expect(screen.queryByText("Failed to fetch backend health: 503")).not.toBeInTheDocument();
     });
   });
@@ -116,9 +116,9 @@ describe("frontend bootstrap", () => {
       </StrictMode>,
     );
 
-    expect(await screen.findByText("Backend app: print-job-manager")).toBeInTheDocument();
-    expect(screen.getByText("API base URL: http://localhost:8000/api/v1")).toBeInTheDocument();
-    expect(screen.getByText("Backend status: ok")).toBeInTheDocument();
+    expect(await screen.findByText("print-job-manager")).toBeInTheDocument();
+    expect(screen.getByText("http://localhost:8000/api/v1")).toBeInTheDocument();
+    expect(screen.getByText("ok")).toBeInTheDocument();
 
     firstRender.unmount();
 
@@ -131,6 +131,6 @@ describe("frontend bootstrap", () => {
     );
 
     expect(await screen.findByText("Failed to fetch backend health: 503")).toBeInTheDocument();
-    expect(screen.queryByText("Backend status: ok")).not.toBeInTheDocument();
+    expect(screen.queryByText("ok")).not.toBeInTheDocument();
   });
 });

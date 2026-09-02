@@ -46,9 +46,9 @@ describe("App", () => {
 
     render(<App />);
 
-    expect(await screen.findByText("Backend app: print-job-manager")).toBeInTheDocument();
-    expect(await screen.findByText("API base URL: http://localhost:8000/api/v1")).toBeInTheDocument();
-    expect(await screen.findByText("Backend status: ok")).toBeInTheDocument();
+    expect(await screen.findByText("print-job-manager")).toBeInTheDocument();
+    expect(await screen.findByText("http://localhost:8000/api/v1")).toBeInTheDocument();
+    expect(await screen.findByText("ok")).toBeInTheDocument();
   });
 
   it("shows a startup error message when backend bootstrap requests fail", async () => {
@@ -64,6 +64,6 @@ describe("App", () => {
     render(<App />);
 
     expect(await screen.findByText(/failed to fetch backend health/i)).toBeInTheDocument();
-    expect(screen.queryByText("Backend status: ok")).not.toBeInTheDocument();
+    expect(screen.queryByText("ok")).not.toBeInTheDocument();
   });
 });

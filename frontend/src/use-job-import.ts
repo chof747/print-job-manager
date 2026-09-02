@@ -14,6 +14,7 @@ export function useJobImport(apiBaseUrl: string | null) {
   const [missingPlanningValues, setMissingPlanningValues] = useState<string[]>([]);
   const [jobs, setJobs] = useState<Job[]>([]);
   const [createError, setCreateError] = useState<string | null>(null);
+  const [isCreated, setIsCreated] = useState(false);
   const [isImporting, setIsImporting] = useState(false);
 
   async function importFile(file: File | undefined) {
@@ -27,6 +28,7 @@ export function useJobImport(apiBaseUrl: string | null) {
       setArtifact(result.artifact);
       setMissingPlanningValues(result.missingPlanningValues);
       setCreateError(null);
+      setIsCreated(false);
     } finally {
       setIsImporting(false);
     }
@@ -38,12 +40,14 @@ export function useJobImport(apiBaseUrl: string | null) {
     }
 
     let jobCreated = false;
+    setIsCreated(false);
     try {
       await createJob(apiBaseUrl, artifactId, planningValues);
       jobCreated = true;
       setCreateError(null);
       const queue = await fetchQueue(apiBaseUrl);
       setJobs(queue.jobs);
+      setIsCreated(true);
     } catch (error: unknown) {
       if (jobCreated) {
         setCreateError("Job was created, but the active queue could not be refreshed");
@@ -68,5 +72,5 @@ export function useJobImport(apiBaseUrl: string | null) {
     }
   }
 
-  return { artifact, missingPlanningValues, jobs, createError, isImporting, importFile, create };
+  return { artifact, missingPlanningValues, jobs, createError, isCreated, isImporting, importFile, create };
 }
