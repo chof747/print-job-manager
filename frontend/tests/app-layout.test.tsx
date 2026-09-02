@@ -11,7 +11,7 @@ afterEach(() => {
 });
 
 
-it("renders the current workflow in a dark operations shell with guided import and active queue panels", async () => {
+it("renders the current workflow in the prototype's light operations shell with guided import and active queue panels", async () => {
   vi.stubGlobal("fetch", vi.fn(async (input: RequestInfo | URL) => {
     const url = String(input);
 
@@ -33,7 +33,7 @@ it("renders the current workflow in a dark operations shell with guided import a
   render(<App />);
 
   const shell = await screen.findByRole("main", { name: /operations/i });
-  expect(shell).toHaveClass("bg-slate-950");
+  expect(shell).toHaveClass("bg-slate-50");
   expect(within(shell).getByRole("region", { name: /guided import/i })).toContainElement(
     screen.getByLabelText(/g-code file/i),
   );

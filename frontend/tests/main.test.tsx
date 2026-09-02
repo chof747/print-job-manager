@@ -45,9 +45,9 @@ describe("main entrypoint", () => {
 
     await import("../src/main");
 
-    expect(await screen.findByText("Backend app: print-job-manager")).toBeInTheDocument();
-    expect(screen.getByText("API base URL: http://localhost:8000/api/v1")).toBeInTheDocument();
-    expect(screen.getByText("Backend status: ok")).toBeInTheDocument();
-    expect(document.getElementById("root")?.textContent).toContain("Backend app: print-job-manager");
+    expect(await screen.findByText("print-job-manager")).toBeInTheDocument();
+    expect(screen.getByText("http://localhost:8000/api/v1")).toBeInTheDocument();
+    expect(screen.getByText("ok")).toBeInTheDocument();
+    expect(document.getElementById("root")?.textContent).toContain("print-job-manager");
   });
 });

@@ -5,7 +5,7 @@ import { App } from "../src/app";
 
 
 const apiBaseUrl = "http://localhost:8000/api/v1";
-const controlClasses = ["border", "border-slate-700", "bg-slate-800", "text-slate-100", "focus-visible:ring-2", "focus-visible:ring-cyan-400"];
+const controlClasses = ["border", "border-slate-300", "bg-white", "text-slate-900", "focus-visible:ring-2", "focus-visible:ring-cyan-400"];
 
 
 afterEach(() => {
@@ -15,7 +15,7 @@ afterEach(() => {
 });
 
 
-it("styles file, planning, and create controls as dark keyboard-focusable workflow controls", async () => {
+it("styles file, planning, and create controls as prototype-aligned keyboard-focusable workflow controls", async () => {
   vi.stubGlobal("fetch", vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
     const url = String(input);
 
@@ -53,5 +53,11 @@ it("styles file, planning, and create controls as dark keyboard-focusable workfl
 
   expect(await screen.findByLabelText(/^material$/i)).toHaveClass(...controlClasses);
   expect(screen.getByLabelText(/estimated duration/i)).toHaveClass(...controlClasses);
-  expect(screen.getByRole("button", { name: /create job/i })).toHaveClass(...controlClasses);
+  expect(screen.getByRole("button", { name: /create job/i })).toHaveClass(
+    "border-indigo-600",
+    "bg-indigo-600",
+    "text-white",
+    "focus-visible:ring-2",
+    "focus-visible:ring-cyan-400",
+  );
 });

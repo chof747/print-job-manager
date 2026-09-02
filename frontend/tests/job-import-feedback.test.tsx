@@ -76,7 +76,7 @@ it("gives upload, create success, create failure, and queue refresh failure dist
   const fileInput = await screen.findByLabelText(/g-code file/i);
   fireEvent.change(fileInput, { target: { files: [new File(["G28\n"], "first.gcode")] } });
   const loadingFeedback = await screen.findByRole("status", { name: /uploading g-code/i });
-  expect(loadingFeedback).toHaveClass("border-cyan-800", "bg-cyan-950", "text-cyan-100");
+  expect(loadingFeedback).toHaveClass("border-indigo-200", "bg-indigo-100", "text-indigo-800");
 
   resolveFirstImport?.(jsonResponse({ artifact, missingPlanningValues: ["material"] }, 201));
   await screen.findByLabelText(/^material$/i);
@@ -91,17 +91,17 @@ it("gives upload, create success, create failure, and queue refresh failure dist
 
   await createFromImportedFile("second.gcode");
   const successFeedback = await screen.findByRole("status", { name: /job created/i });
-  expect(successFeedback).toHaveClass("border-emerald-800", "bg-emerald-950", "text-emerald-100");
+  expect(successFeedback).toHaveClass("border-emerald-200", "bg-emerald-50", "text-emerald-800");
 
   await createFromImportedFile("third.gcode");
   const createFailure = await screen.findByRole("alert");
   expect(createFailure).toHaveTextContent("Unable to create job");
-  expect(createFailure).toHaveClass("border-rose-800", "bg-rose-950", "text-rose-100");
+  expect(createFailure).toHaveClass("border-rose-200", "bg-rose-50", "text-rose-800");
 
   await createFromImportedFile("fourth.gcode");
   const queueRefreshFailure = await screen.findByRole("alert");
   expect(queueRefreshFailure).toHaveTextContent(
     "Job was created, but the active queue could not be refreshed",
   );
-  expect(queueRefreshFailure).toHaveClass("border-rose-800", "bg-rose-950", "text-rose-100");
+  expect(queueRefreshFailure).toHaveClass("border-rose-200", "bg-rose-50", "text-rose-800");
 });

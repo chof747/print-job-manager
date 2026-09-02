@@ -11,7 +11,7 @@ afterEach(() => {
 });
 
 
-it("presents backend runtime details in a muted complementary status region", async () => {
+it("presents backend runtime details in a card-based complementary status region", async () => {
   vi.stubGlobal("fetch", vi.fn(async (input: RequestInfo | URL) => {
     const url = String(input);
 
@@ -35,7 +35,7 @@ it("presents backend runtime details in a muted complementary status region", as
   await screen.findByRole("heading", { name: /guided import/i });
   const runtimeStatus = screen.getByRole("complementary", { name: /backend runtime status/i });
 
-  expect(runtimeStatus).toHaveClass("text-sm", "text-slate-400");
-  expect(within(runtimeStatus).getByText("Backend app: print-job-manager")).toBeVisible();
-  expect(within(runtimeStatus).getByText("Backend status: ok")).toBeVisible();
+  expect(runtimeStatus).toHaveClass("border-slate-200", "bg-white");
+  expect(within(runtimeStatus).getByText("print-job-manager")).toBeVisible();
+  expect(within(runtimeStatus).getByText("ok")).toBeVisible();
 });

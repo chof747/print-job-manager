@@ -11,7 +11,7 @@ afterEach(() => {
 });
 
 
-it("keeps the import and active queue panels in one column on mobile and two columns on large screens", async () => {
+it("keeps the import shell in one column on mobile and adds a runtime side rail on large screens", async () => {
   vi.stubGlobal("fetch", vi.fn(async (input: RequestInfo | URL) => {
     const url = String(input);
 
@@ -37,5 +37,5 @@ it("keeps the import and active queue panels in one column on mobile and two col
   const layout = importPanel.parentElement;
 
   expect(layout).toContainElement(queuePanel);
-  expect(layout).toHaveClass("grid-cols-1", "lg:grid-cols-2");
+  expect(layout).toHaveClass("grid-cols-1", "lg:grid-cols-[minmax(0,1fr)_300px]");
 });
