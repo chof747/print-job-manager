@@ -1,6 +1,7 @@
 node_modules/
 .pnpm-store/
 __pycache__/
+data/artifacts/
 
 # Sandcastle runtime state
 .sandcastle/.env

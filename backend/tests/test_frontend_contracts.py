@@ -13,8 +13,12 @@ def test_frontend_runtime_config_file_exists_with_api_base_url(repo_root: Path) 
     assert runtime_config["apiBaseUrl"]
 
 
-def test_frontend_dev_server_smoke_tests_have_been_removed_from_committed_tests(repo_root: Path) -> None:
-    frontend_root_tests = sorted((repo_root / "backend" / "tests").glob("test_root_frontend*.py"))
+def test_frontend_dev_server_smoke_tests_have_been_removed_from_committed_tests(
+    repo_root: Path,
+) -> None:
+    frontend_root_tests = sorted(
+        (repo_root / "backend" / "tests").glob("test_root_frontend*.py")
+    )
 
     invalid_files = []
     for test_file in frontend_root_tests:
@@ -25,4 +29,6 @@ def test_frontend_dev_server_smoke_tests_have_been_removed_from_committed_tests(
         if "import subprocess" in source or "subprocess." in source:
             invalid_files.append(test_file.relative_to(repo_root).as_posix())
 
-    assert invalid_files == [], "frontend dev-server startup verification belongs in manual QA, not committed tests"
+    assert invalid_files == [], (
+        "frontend dev-server startup verification belongs in manual QA, not committed tests"
+    )
