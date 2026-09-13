@@ -289,7 +289,7 @@ Use per-turn ownership guard snapshots, not git stash snapshots or --base checks
 
 Current remediation instruction:
 
-If the existing worktree contains committed or uncommitted tests that run npm run check:*, npm run dev:*, pytest, vitest, pip install, npm install, vite, uvicorn, or long-running server/watch commands, treat those tests as invalid tester output. Route the fix to the tester: replace them with static assertions for developer command existence/shape, and move dev-server startup verification into the final QA checklist.
+If the existing worktree contains committed or uncommitted tests that run pnpm run check:*, pnpm run dev:*, pytest, vitest, pip install, pnpm install, vite, uvicorn, or long-running server/watch commands, treat those tests as invalid tester output. Route the fix to the tester: replace them with static assertions for developer command existence/shape, and move dev-server startup verification into the final QA checklist.
 
 Resume finalization contract:
 
@@ -424,7 +424,7 @@ try {
                 ? [
                     {
                       command:
-                        "if [ -f package.json ]; then if [ -f package-lock.json ]; then npm ci && npm exec vitest -- --version; elif [ -f pnpm-lock.yaml ]; then pnpm install --frozen-lockfile --store-dir /home/agent/workspace/.sandcastle/tmp/pnpm-store && pnpm exec vitest --version; else npm install && npm exec vitest -- --version; fi; fi",
+                        "if [ -f package.json ]; then pnpm install --frozen-lockfile --store-dir /home/agent/workspace/.sandcastle/tmp/pnpm-store && pnpm exec vitest --version; fi",
                     },
                   ]
                 : []),

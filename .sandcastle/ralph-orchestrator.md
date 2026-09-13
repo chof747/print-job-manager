@@ -89,7 +89,7 @@ Forbidden in committed tests:
 - `npm test`
 - `pytest`
 - `vitest`
-- `npm install`
+- `pnpm install`
 - `pip install`
 - `npm run dev:*`
 - `vite`
@@ -100,7 +100,7 @@ For developer-command acceptance criteria, require static assertions such as par
 
 Use root `package.json` check commands for frontend verification. The runner owns routine dependency installation, but an agent may add an issue-required project dependency with the repository's committed package manager. The agent must name the dependency and why it is needed, update the manifest and lockfile together, and include both in its handover. Do not install dependencies speculatively or to work around a missing tool.
 
-Package-manager selection is determined by committed lockfiles: use npm when `package-lock.json` exists; use pnpm only when `pnpm-lock.yaml` exists. In an npm project, use `npm install <named-package>` or `npm install --save-dev <named-package>` only to add an issue-required dependency. In a pnpm project, use the equivalent `pnpm add` command. Do not introduce or invoke pnpm in an npm-managed project. If an issue explicitly migrates to pnpm, it must commit its project-level `pnpm-workspace.yaml` build policy, including explicit approvals such as `allowBuilds: { esbuild: true }` when needed.
+This is a pnpm-managed project. For an issue-required dependency, use `pnpm add <named-package>` or `pnpm add --save-dev <named-package>`, then commit `package.json` and `pnpm-lock.yaml` together. Do not introduce or invoke npm, `package-lock.json`, or another package manager. Required dependency build scripts are approved in `pnpm-workspace.yaml`.
 
 For Python, `uv add` and `uv lock` are allowed only to add an issue-required dependency to `backend/pyproject.toml` and update `backend/uv.lock`. Do not use `pip install`.
 

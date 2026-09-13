@@ -192,7 +192,7 @@ Base tooling belongs in the Docker image:
 
 Project dependencies belong in runner-owned sandbox setup hooks:
 
-- Node dependencies from `package-lock.json` or `package.json`.
+- Node dependencies from `pnpm-lock.yaml`.
 - Python dependencies from committed requirements files.
 - Other ecosystems from their lockfiles or declared dependency manifests.
 
@@ -210,10 +210,10 @@ If the repo expects specific imports, add an import smoke check, for example:
 python -c 'import fastapi, uvicorn'
 ```
 
-Recommended Node hook:
+Recommended Node hook for this pnpm-managed repository:
 
 ```sh
-if [ -f package.json ]; then if [ -f package-lock.json ]; then npm ci; else npm install; fi; fi && if [ -f package.json ]; then npm exec vitest -- --version; fi
+if [ -f package.json ]; then pnpm install --frozen-lockfile --store-dir /home/agent/workspace/.sandcastle/tmp/pnpm-store && pnpm exec vitest --version; fi
 ```
 
 The PATH must include both dependency bin directories before the agent runs:

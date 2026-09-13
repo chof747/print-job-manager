@@ -27,6 +27,7 @@
   "author": "",
   "license": "ISC",
   "type": "commonjs",
+  "packageManager": "pnpm@11.24.0",
   "engines": {
     "node": ">=20"
   },

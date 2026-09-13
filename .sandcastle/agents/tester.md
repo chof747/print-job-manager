@@ -53,7 +53,7 @@ Forbidden in committed tests:
 - `npm test`
 - `pytest`
 - `vitest`
-- `npm install`
+- `pnpm install`
 - `pip install`
 - `npm run dev:*`
 - `vite`
@@ -66,7 +66,7 @@ For acceptance criteria about local dev servers starting, do not create committe
 
 Use root `package.json` check commands for frontend verification. The runner owns routine dependency installation, but you may add a test-harness dependency required by the current issue with the repository's committed package manager. State why it is necessary, and commit the manifest and lockfile changes together. Do not install dependencies speculatively or to work around a missing tool.
 
-Use npm when `package-lock.json` exists. For a necessary test-harness dependency, use `npm install --save-dev <named-package>` and update `package.json` and `package-lock.json` together. Use pnpm only when `pnpm-lock.yaml` exists; then use `pnpm add --save-dev`. Do not introduce or invoke pnpm in an npm-managed project. A pnpm migration must include a committed project-level build policy that explicitly approves required dependency scripts such as esbuild.
+Use pnpm for a necessary test-harness dependency: `pnpm add --save-dev <named-package>`. Commit `package.json` and `pnpm-lock.yaml` together. Do not introduce or invoke npm, `package-lock.json`, or another package manager.
 
 For backend test dependencies, use `uv add --group test` or `uv lock` only when required by the current issue, and commit `backend/pyproject.toml` with `backend/uv.lock`. Do not use `pip install`.
 

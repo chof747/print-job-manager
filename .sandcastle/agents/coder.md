@@ -34,7 +34,7 @@ Do not bootstrap `pip`, Python `venv` support, Node, npm, system packages, or OS
 
 Use the tester-provided root check command for frontend verification. The runner owns routine dependency installation, but you may add an issue-required project dependency with the repository's committed package manager. Name the dependency and why it is needed in your handover, and commit its manifest and lockfile changes together. Do not install dependencies speculatively or to work around a missing tool.
 
-Use npm when `package-lock.json` exists. For an issue-required dependency, use `npm install <named-package>` or `npm install --save-dev <named-package>` and commit `package.json` and `package-lock.json` together. Use pnpm only when `pnpm-lock.yaml` exists; then use `pnpm add`. Do not introduce or invoke pnpm in an npm-managed project. A pnpm migration must include a committed project-level build policy that explicitly approves required dependency scripts such as esbuild.
+Use pnpm for issue-required dependencies: `pnpm add <named-package>` or `pnpm add --save-dev <named-package>`. Commit `package.json` and `pnpm-lock.yaml` together. Do not introduce or invoke npm, `package-lock.json`, or another package manager.
 
 For backend dependencies, use `uv add` or `uv lock` only for an issue-required dependency and commit `backend/pyproject.toml` with `backend/uv.lock`. Do not use `pip install`.
 

@@ -33,9 +33,9 @@ Normal Sandcastle logs are human-readable. Set `SANDCASTLE_LOG_VERBOSE=true` onl
 
 The sandbox resolves project-declared backend dependencies through `uv` before the agent starts, so agents can verify backend code without bootstrapping tooling themselves. Set `SANDCASTLE_INSTALL_PROJECT_DEPS=false` to skip this setup.
 
-The sandbox also installs Node dependencies before the agent starts, so frontend tools like Vitest are available on `PATH`. It uses pnpm through Corepack when `pnpm-lock.yaml` exists, otherwise npm. Set `SANDCASTLE_INSTALL_NODE_DEPS=false` to skip this setup.
+The sandbox also installs Node dependencies with pnpm before the agent starts, so frontend tools like Vitest are available on `PATH`. Set `SANDCASTLE_INSTALL_NODE_DEPS=false` to skip this setup.
 
-The committed lockfile selects the frontend package manager: npm for `package-lock.json`, pnpm for `pnpm-lock.yaml`. Agents normally run root check commands rather than invoking a package manager directly. They may add an issue-required, named project dependency with that package manager when they commit the manifest and lockfile together and document why. A future pnpm migration must commit an explicit `pnpm-workspace.yaml` build policy approving any required dependency scripts, such as esbuild. Python dependency additions use `uv add` or `uv lock`, with `backend/pyproject.toml` and `backend/uv.lock` committed together.
+This repository is pnpm-managed: `pnpm-lock.yaml` is the sole Node lockfile, `package.json` pins the pnpm release, and `pnpm-workspace.yaml` declares permitted dependency build scripts. Agents normally run root check commands rather than invoking a package manager directly. They may add an issue-required, named project dependency with `pnpm` when they commit the manifest and lockfile together and document why. Python dependency additions use `uv add` or `uv lock`, with `backend/pyproject.toml` and `backend/uv.lock` committed together.
 
 Build the local Sandcastle Docker image after changing `.sandcastle/Dockerfile`:
 
