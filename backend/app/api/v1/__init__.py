@@ -1,8 +1,7 @@
 from fastapi import APIRouter
 
-from backend.app.api.v1 import health, jobs, root
-from backend.app.config import API_V1_PREFIX
-
+from ...config import API_V1_PREFIX
+from . import health, jobs, root
 
 router = APIRouter()
 router.include_router(root.router, prefix=API_V1_PREFIX)

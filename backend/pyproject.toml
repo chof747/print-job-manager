@@ -3,8 +3,12 @@ name = "print-job-manager-backend"
 version = "0.1.0"
 requires-python = ">=3.13"
 dependencies = [
+    "alembic>=1.19.1",
     "fastapi==0.141.1",
+    "psycopg[binary]>=3.3.5",
+    "pydantic-settings>=2.15.0",
     "python-multipart==0.0.22",
+    "sqlalchemy>=2.0.52",
     "uvicorn==0.35.0",
 ]
 
@@ -12,4 +16,9 @@ dependencies = [
 test = [
     "pytest==8.4.1",
     "httpx==0.28.1",
+    "ruff==0.16.5",
+    "mypy==2.3.1",
 ]
+
+[tool.mypy]
+explicit_package_bases = true

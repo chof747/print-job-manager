@@ -10,6 +10,7 @@
     "update": "uv sync --project backend --group test && pnpm sync",
     "check:backend": "uv run --project backend pytest backend/tests -q",
     "check:frontend": "vitest run frontend/",
+    "migrate:backend": "cd backend && PYTHONPATH=.. uv run alembic -c alembic.ini upgrade head",
     "dev:backend": "uv run --project backend uvicorn backend.app.main:app --reload",
     "dev:frontend": "vite --config frontend/vite.config.mts frontend",
     "sandcastle": "tsx --env-file=.sandcastle/.env .sandcastle/main.mts",
