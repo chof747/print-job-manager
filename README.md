@@ -14,13 +14,13 @@ uv sync --project backend --group test
 Run the backend test suite from the repo root:
 
 ```sh
-npm run check:backend
+pnpm run check:backend
 ```
 
 Start the FastAPI backend dev server from the repo root:
 
 ```sh
-npm run dev:backend
+pnpm run dev:backend
 ```
 
 ## Sandcastle AFK Builds
@@ -40,7 +40,7 @@ This repository is pnpm-managed: `pnpm-lock.yaml` is the sole Node lockfile, `pa
 Build the local Sandcastle Docker image after changing `.sandcastle/Dockerfile`:
 
 ```sh
-npm run sandcastle:docker:build
+pnpm run sandcastle:docker:build
 ```
 
 ### Start A New Build
@@ -48,13 +48,13 @@ npm run sandcastle:docker:build
 Run the next open issue labeled `ready-for-agent`:
 
 ```sh
-npm run sandcastle:docker
+pnpm run sandcastle:docker
 ```
 
 Run a specific issue:
 
 ```sh
-SANDCASTLE_ISSUE_NUMBER=37 npm run sandcastle:docker
+SANDCASTLE_ISSUE_NUMBER=37 pnpm run sandcastle:docker
 ```
 
 By default, the runner allows up to `5` agent iterations and stops earlier when the orchestrator outputs `<promise>COMPLETE</promise>`. In this repo, `COMPLETE` means the PR flow is done: QA checklist gathered, final review handled, changes committed and pushed, PR created, handover comment posted, and issue labels updated.
@@ -62,13 +62,13 @@ By default, the runner allows up to `5` agent iterations and stops earlier when 
 Override the iteration limit for larger issues:
 
 ```sh
-SANDCASTLE_ISSUE_NUMBER=37 SANDCASTLE_MAX_ITERATIONS=10 npm run sandcastle:docker
+SANDCASTLE_ISSUE_NUMBER=37 SANDCASTLE_MAX_ITERATIONS=10 pnpm run sandcastle:docker
 ```
 
 Preview the generated prompt without starting the agent:
 
 ```sh
-SANDCASTLE_DRY_RUN=true SANDCASTLE_ISSUE_NUMBER=37 npm run sandcastle:dry-run
+SANDCASTLE_DRY_RUN=true SANDCASTLE_ISSUE_NUMBER=37 pnpm run sandcastle:dry-run
 ```
 
 Sandcastle creates a branch based on issue labels:
@@ -91,7 +91,7 @@ Resume against that preserved worktree:
 SANDCASTLE_ISSUE_NUMBER=37 \
 SANDCASTLE_MAX_ITERATIONS=10 \
 SANDCASTLE_EXISTING_WORKTREE_PATH=.sandcastle/worktrees/feat-issue-37-bootstrap-split-app-shell \
-npm run sandcastle:docker
+pnpm run sandcastle:docker
 ```
 
 This resumes the worktree state, not the previous model session memory. The orchestrator will inspect the current files and continue from the next unfinished behavior.
