@@ -7,7 +7,11 @@ API_V1_PREFIX = "/api/v1"
 
 
 class Settings(BaseSettings):
-    model_config = SettingsConfigDict(env_prefix="PRINT_JOB_MANAGER_")
+    model_config = SettingsConfigDict(
+        env_prefix="PRINT_JOB_MANAGER_",
+        env_file=Path(__file__).resolve().parents[1] / ".env",
+        env_file_encoding="utf-8",
+    )
 
     app_name: str = "print-job-manager"
     frontend_origin: str = "http://localhost:5173"
