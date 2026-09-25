@@ -1,9 +1,8 @@
 import importlib
 from pathlib import Path
-from typing import Any, cast
+from typing import Any, Self, cast
 
 import pytest
-
 from backend.app.api.v1 import jobs
 
 
@@ -97,6 +96,7 @@ def test_fresh_import_service_loads_persisted_artifact_metadata_and_parser_snaps
 
     assert job["executionData"] == {
         "artifactRef": imported["artifact"]["id"],
+        "artifactFilename": "calibration-cube.gcode",
         "material": "PLA",
         "extractedMetadata": {"material": "PLA", "estimatedDuration": 3600},
     }
@@ -195,3 +195,43 @@ def test_invalid_parser_output_does_not_leave_a_newly_written_artifact(
         )
 
     assert not storage_path.exists() or list(storage_path.iterdir()) == []
+
+
+def test_sqlalchemy_import_repository_persists_uploaded_filename(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    stored_records: list[object] = []
+
+    class Session:
+        def __enter__(self) -> Self:
+            return self
+
+        def __exit__(
+            self, exc_type: object, exc_value: object, traceback: object
+        ) -> None:
+            del exc_type, exc_value, traceback
+
+        def merge(self, record: object) -> None:
+            stored_records.append(record)
+
+    class SessionFactory:
+        def begin(self) -> Session:
+            return Session()
+
+    class ArtifactRecord:
+        def __init__(self, **values: object) -> None:
+            self.values = values
+
+    monkeypatch.setattr(jobs, "SessionFactory", SessionFactory())
+    monkeypatch.setattr(jobs, "ArtifactRecord", ArtifactRecord)
+
+    jobs.SqlAlchemyImportRepository().save_import(
+        artifact_id="sha256:artifact",
+        filename="calibration-cube.gcode",
+        media_type="text/x.gcode",
+        parsed={"missingPlanningValues": [], "diagnostics": []},
+    )
+
+    assert len(stored_records) == 1
+    assert isinstance(stored_records[0], ArtifactRecord)
+    assert stored_records[0].values["filename"] == "calibration-cube.gcode"

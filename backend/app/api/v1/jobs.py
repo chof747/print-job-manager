@@ -79,7 +79,7 @@ class FileSystemStorage:
         self.path = path
 
     def store(self, *, filename: str, media_type: str, content: bytes) -> str:
-        del filename, media_type
+        del media_type
         artifact_id = f"sha256:{hashlib.sha256(content).hexdigest()}"
         self.path.mkdir(parents=True, exist_ok=True)
         target = self.path / artifact_id.removeprefix("sha256:")
@@ -308,13 +308,14 @@ class SqlAlchemyImportRepository:
         media_type: str,
         parsed: dict[str, object],
     ) -> None:
-        del filename, media_type
+        del media_type
         with SessionFactory.begin() as session:
             session.merge(
                 ArtifactRecord(
                     id=artifact_id,
                     sha256=artifact_id.removeprefix("sha256:"),
                     storage_key=artifact_id,
+                    filename=filename,
                     parsed_metadata_snapshot=deepcopy(parsed),
                 )
             )
@@ -324,7 +325,10 @@ class SqlAlchemyImportRepository:
             artifact = session.get(ArtifactRecord, artifact_id)
             if artifact is None:
                 return None
-            return {"parsed": deepcopy(artifact.parsed_metadata_snapshot)}
+            return {
+                "filename": artifact.filename,
+                "parsed": deepcopy(artifact.parsed_metadata_snapshot),
+            }
 
 
 class InMemoryJobRepository:
@@ -462,9 +466,11 @@ class ImportService:
                 raise TypeError("persisted import parsed snapshot must be an object")
             missing_planning_values = _missing_planning_values(parsed)
             extracted_metadata = parsed.get("extractedMetadata")
+            filename = record.get("filename")
         elif artifact_id in self.repository.imported_artifact_ids:
             missing_planning_values = self.import_missing_planning_values[artifact_id]
             extracted_metadata = self.import_extracted_metadata.get(artifact_id)
+            filename = None
         else:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND)
         if isinstance(extracted_metadata, dict):
@@ -490,6 +496,8 @@ class ImportService:
             "artifactRef": artifact_id,
             "material": material,
         }
+        if isinstance(filename, str):
+            execution_data["artifactFilename"] = filename
         execution_data.update(
             {
                 value: deepcopy(planning_values[value])

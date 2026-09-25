@@ -11,6 +11,7 @@ const job = {
   state: "ready",
   executionData: {
     artifactRef: artifactId,
+    artifactFilename: "calibration-cube.gcode",
     material: "PLA",
   },
   schedulingData: {
@@ -36,6 +37,68 @@ afterEach(() => {
 
 
 describe("G-code import", () => {
+  it("loads persisted ready jobs into the active queue on page load", async () => {
+    const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
+      const url = String(input);
+
+      if (url === "/runtime-config.json") {
+        return jsonResponse({ apiBaseUrl });
+      }
+
+      if (url === `${apiBaseUrl}/health`) {
+        return jsonResponse({ status: "ok" });
+      }
+
+      if (url === `${apiBaseUrl}/config`) {
+        return jsonResponse({ appName: "print-job-manager", apiBasePath: "/api/v1" });
+      }
+
+      if (url === `${apiBaseUrl}/queue`) {
+        return jsonResponse({ jobs: [job] });
+      }
+
+      throw new Error(`Unexpected fetch: ${url}`);
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    render(<App />);
+
+    expect(await screen.findByText("calibration-cube.gcode")).toBeVisible();
+    expect(fetchMock).toHaveBeenCalledWith(`${apiBaseUrl}/queue`);
+  });
+
+  it("labels a persisted job without a filename as a legacy G-code job", async () => {
+    const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
+      const url = String(input);
+
+      if (url === "/runtime-config.json") {
+        return jsonResponse({ apiBaseUrl });
+      }
+
+      if (url === `${apiBaseUrl}/health`) {
+        return jsonResponse({ status: "ok" });
+      }
+
+      if (url === `${apiBaseUrl}/config`) {
+        return jsonResponse({ appName: "print-job-manager", apiBasePath: "/api/v1" });
+      }
+
+      if (url === `${apiBaseUrl}/queue`) {
+        return jsonResponse({
+          jobs: [{ ...job, executionData: { artifactRef: artifactId, material: "PLA" } }],
+        });
+      }
+
+      throw new Error(`Unexpected fetch: ${url}`);
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    render(<App />);
+
+    expect(await screen.findByText("Legacy G-code job")).toBeVisible();
+    expect(screen.queryByText(artifactId)).not.toBeInTheDocument();
+  });
+
   it("guides file selection to G-code files", async () => {
     const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
       const url = String(input);
@@ -103,6 +166,47 @@ describe("G-code import", () => {
     expect(screen.getByLabelText(/^material$/i)).toHaveAttribute("readonly");
     expect(screen.getByText(/prusa-family/i)).toBeVisible();
     expect(screen.getByText(/filament_type/i)).toBeVisible();
+  });
+
+  it("shows extracted estimated duration with time units", async () => {
+    const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = String(input);
+
+      if (url === "/runtime-config.json") {
+        return jsonResponse({ apiBaseUrl });
+      }
+
+      if (url === `${apiBaseUrl}/health`) {
+        return jsonResponse({ status: "ok" });
+      }
+
+      if (url === `${apiBaseUrl}/config`) {
+        return jsonResponse({ appName: "print-job-manager", apiBasePath: "/api/v1" });
+      }
+
+      if (url === `${apiBaseUrl}/import` && init?.method === "POST") {
+        return jsonResponse({
+          artifact: { id: artifactId, filename: "calibration-cube.gcode" },
+          extractedMetadata: { estimatedDuration: 34910 },
+          provenance: {
+            estimatedDuration: { parser: "prusa-family", sourceKey: "estimated printing time (normal mode)" },
+          },
+          missingPlanningValues: [],
+          diagnostics: [],
+        }, 201);
+      }
+
+      throw new Error(`Unexpected fetch: ${url}`);
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    render(<App />);
+
+    fireEvent.change(await screen.findByLabelText(/g-code file/i), {
+      target: { files: [new File(["; estimated printing time (normal mode) = 9h 41m 50s\n"], "calibration-cube.gcode", { type: "text/x.gcode" })] },
+    });
+
+    expect(await screen.findByLabelText(/estimated duration/i)).toHaveValue("9h 41m 50s");
   });
 
   it("shows parser diagnostics in the import review", async () => {

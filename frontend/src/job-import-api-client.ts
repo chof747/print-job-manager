@@ -16,6 +16,7 @@ export type Job = {
   state: string;
   executionData: {
     artifactRef: string;
+    artifactFilename?: string;
   };
 };
 

@@ -38,3 +38,28 @@ def test_initial_migration_creates_artifact_job_and_history_schema(
         "state",
     }
     assert tables["job_history"] >= {"id", "job_id", "state", "created_at"}
+
+
+def test_artifact_filename_migration_adds_an_optional_filename_column(
+    repo_root: Path, monkeypatch
+) -> None:
+    migration_path = (
+        repo_root / "backend" / "alembic" / "versions" / "20260925_0002_add_artifact_filename.py"
+    )
+    spec = importlib.util.spec_from_file_location("artifact_filename_migration", migration_path)
+    assert spec is not None and spec.loader is not None
+    migration = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(migration)
+    added_columns: list[tuple[str, sa.Column[object]]] = []
+
+    monkeypatch.setattr(
+        migration.op,
+        "add_column",
+        lambda table, column: added_columns.append((table, column)),
+    )
+
+    migration.upgrade()
+
+    assert [(table, column.name, column.nullable) for table, column in added_columns] == [
+        ("artifacts", "filename", True)
+    ]

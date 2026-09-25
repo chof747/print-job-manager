@@ -47,6 +47,7 @@ class ArtifactRecord(Base):
     id: Mapped[str] = mapped_column(String(255), primary_key=True)
     sha256: Mapped[str] = mapped_column(String(64), nullable=False)
     storage_key: Mapped[str] = mapped_column(String(255), nullable=False)
+    filename: Mapped[str | None] = mapped_column(String(255), nullable=True)
     parsed_metadata_snapshot: Mapped[dict[str, object]] = mapped_column(
         JSONB, nullable=False
     )

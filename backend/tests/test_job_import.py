@@ -766,6 +766,7 @@ def test_creating_a_job_with_all_missing_material_planning_values_returns_one_re
     assert job["state"] == "ready"
     assert job["executionData"] == {
         "artifactRef": artifact_id,
+        "artifactFilename": "calibration-cube.gcode",
         "material": "PLA",
     }
     assert job["schedulingData"] == {"priority": 0}
@@ -1064,6 +1065,7 @@ def test_creating_a_job_persists_a_parser_required_non_material_planning_value_i
     assert create_response.status_code == 201
     assert create_response.json()["executionData"] == {
         "artifactRef": artifact_id,
+        "artifactFilename": "part.gcode",
         "material": None,
         "estimatedDuration": 60,
     }
@@ -1095,6 +1097,7 @@ def test_creating_a_ready_job_retains_parser_extracted_metadata_in_immutable_exe
     assert create_response.json()["state"] == "ready"
     assert create_response.json()["executionData"] == {
         "artifactRef": artifact_id,
+        "artifactFilename": "part.gcode",
         "material": "PLA",
         "extractedMetadata": {"estimatedDuration": 3600},
     }

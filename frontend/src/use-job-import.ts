@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 import {
   createJob,
@@ -19,6 +19,22 @@ export function useJobImport(apiBaseUrl: string | null) {
   const [createError, setCreateError] = useState<string | null>(null);
   const [isCreated, setIsCreated] = useState(false);
   const [isImporting, setIsImporting] = useState(false);
+  const queueRequestVersion = useRef(0);
+
+  useEffect(() => {
+    if (!apiBaseUrl) {
+      return;
+    }
+
+    const requestVersion = ++queueRequestVersion.current;
+    void fetchQueue(apiBaseUrl)
+      .then((queue) => {
+        if (requestVersion === queueRequestVersion.current) {
+          setJobs(queue.jobs);
+        }
+      })
+      .catch(() => {});
+  }, [apiBaseUrl]);
 
   async function importFile(file: File | undefined) {
     if (!apiBaseUrl || !file) {
@@ -51,8 +67,11 @@ export function useJobImport(apiBaseUrl: string | null) {
       await createJob(apiBaseUrl, artifactId, planningValues);
       jobCreated = true;
       setCreateError(null);
+      const requestVersion = ++queueRequestVersion.current;
       const queue = await fetchQueue(apiBaseUrl);
-      setJobs(queue.jobs);
+      if (requestVersion === queueRequestVersion.current) {
+        setJobs(queue.jobs);
+      }
       setIsCreated(true);
     } catch (error: unknown) {
       if (jobCreated) {

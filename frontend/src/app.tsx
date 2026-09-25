@@ -7,6 +7,15 @@ import { Badge, Button, Card, FormField, ReasonList, StatusPill, Stepper } from 
 import { useJobImport } from "./use-job-import";
 
 
+function formatEstimatedDuration(seconds: number) {
+  const hours = Math.floor(seconds / 3600);
+  const minutes = Math.floor((seconds % 3600) / 60);
+  const remainingSeconds = seconds % 60;
+
+  return hours ? `${hours}h ${minutes}m ${remainingSeconds}s` : `${minutes}m ${remainingSeconds}s`;
+}
+
+
 export function App() {
   const runtimeConfig = useContext(RuntimeConfigContext);
   const bootstrapStateCache = useContext(BootstrapStateCacheContext);
@@ -156,10 +165,10 @@ export function App() {
              <Fragment key={key}>
                <FormField label={formatPlanningValueLabel(key)}>
                  <input
-                   className="rounded-xl border border-slate-300 bg-slate-100 px-3 py-2 text-slate-900 shadow-sm"
-                   readOnly
-                   value={String(value)}
-                 />
+                    className="rounded-xl border border-slate-300 bg-slate-100 px-3 py-2 text-slate-900 shadow-sm"
+                    readOnly
+                    value={key === "estimatedDuration" && typeof value === "number" ? formatEstimatedDuration(value) : String(value)}
+                  />
                </FormField>
                 {provenance[key] && <p className="text-sm text-slate-500">Source: {provenance[key].parser}, {provenance[key].sourceKey}</p>}
               </Fragment>
@@ -216,7 +225,7 @@ export function App() {
           <div className="mt-4 grid gap-2">
             {jobs.map((job) => (
               <div key={job.id} className="flex items-center justify-between gap-4 rounded-xl border border-slate-200 px-4 py-3">
-                <strong>{job.executionData.artifactRef === artifact?.id ? artifact.filename : job.executionData.artifactRef}</strong>
+                <strong>{job.executionData.artifactFilename ?? (job.executionData.artifactRef === artifact?.id ? artifact.filename : "Legacy G-code job")}</strong>
                 <StatusPill tone="ready">{job.state}</StatusPill>
               </div>
             ))}
