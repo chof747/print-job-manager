@@ -11,6 +11,9 @@ import {
 
 export function useJobImport(apiBaseUrl: string | null) {
   const [artifact, setArtifact] = useState<ImportedArtifact | null>(null);
+  const [extractedMetadata, setExtractedMetadata] = useState<Record<string, string | number>>({});
+  const [provenance, setProvenance] = useState<Record<string, { parser: string; sourceKey: string }>>({});
+  const [diagnostics, setDiagnostics] = useState<Array<{ code: string; sourceKey: string }>>([]);
   const [missingPlanningValues, setMissingPlanningValues] = useState<string[]>([]);
   const [jobs, setJobs] = useState<Job[]>([]);
   const [createError, setCreateError] = useState<string | null>(null);
@@ -26,6 +29,9 @@ export function useJobImport(apiBaseUrl: string | null) {
     try {
       const result = await importGcode(apiBaseUrl, file);
       setArtifact(result.artifact);
+      setExtractedMetadata(result.extractedMetadata ?? {});
+      setProvenance(result.provenance ?? {});
+      setDiagnostics(result.diagnostics ?? []);
       setMissingPlanningValues(result.missingPlanningValues);
       setCreateError(null);
       setIsCreated(false);
@@ -72,5 +78,5 @@ export function useJobImport(apiBaseUrl: string | null) {
     }
   }
 
-  return { artifact, missingPlanningValues, jobs, createError, isCreated, isImporting, importFile, create };
+  return { artifact, extractedMetadata, provenance, diagnostics, missingPlanningValues, jobs, createError, isCreated, isImporting, importFile, create };
 }

@@ -5,6 +5,9 @@ export type ImportedArtifact = {
 
 export type ImportGcodeResult = {
   artifact: ImportedArtifact;
+  extractedMetadata?: Record<string, string | number>;
+  provenance?: Record<string, { parser: string; sourceKey: string }>;
+  diagnostics?: Array<{ code: string; sourceKey: string }>;
   missingPlanningValues: string[];
 };
 
