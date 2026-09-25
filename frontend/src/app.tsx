@@ -7,6 +7,15 @@ import { Badge, Button, Card, FormField, ReasonList, StatusPill, Stepper } from 
 import { useJobImport } from "./use-job-import";
 
 
+function formatEstimatedDuration(seconds: number) {
+  const hours = Math.floor(seconds / 3600);
+  const minutes = Math.floor((seconds % 3600) / 60);
+  const remainingSeconds = seconds % 60;
+
+  return hours ? `${hours}h ${minutes}m ${remainingSeconds}s` : `${minutes}m ${remainingSeconds}s`;
+}
+
+
 export function App() {
   const runtimeConfig = useContext(RuntimeConfigContext);
   const bootstrapStateCache = useContext(BootstrapStateCacheContext);
@@ -17,7 +26,7 @@ export function App() {
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [importError, setImportError] = useState<string | null>(null);
   const [planningValues, setPlanningValues] = useState<Record<string, string>>({});
-  const { artifact, missingPlanningValues, jobs, createError, isCreated, isImporting, importFile, create } = useJobImport(apiBaseUrl);
+  const { artifact, extractedMetadata, provenance, diagnostics, missingPlanningValues, jobs, createError, isCreated, isImporting, importFile, create } = useJobImport(apiBaseUrl);
 
   useEffect(() => {
     let isActive = true;
@@ -151,8 +160,25 @@ export function App() {
               Uploading G-code...
             </p>
           )}
-          {importError && <p role="alert" className="rounded-xl border border-rose-200 bg-rose-50 px-3 py-2 text-sm text-rose-800">{importError}</p>}
-          {artifact && missingPlanningValues.map((value) => (
+           {importError && <p role="alert" className="rounded-xl border border-rose-200 bg-rose-50 px-3 py-2 text-sm text-rose-800">{importError}</p>}
+            {artifact && Object.entries(extractedMetadata).map(([key, value]) => (
+             <Fragment key={key}>
+               <FormField label={formatPlanningValueLabel(key)}>
+                 <input
+                    className="rounded-xl border border-slate-300 bg-slate-100 px-3 py-2 text-slate-900 shadow-sm"
+                    readOnly
+                    value={key === "estimatedDuration" && typeof value === "number" ? formatEstimatedDuration(value) : String(value)}
+                  />
+               </FormField>
+                {provenance[key] && <p className="text-sm text-slate-500">Source: {provenance[key].parser}, {provenance[key].sourceKey}</p>}
+              </Fragment>
+            ))}
+           {artifact && diagnostics.map((diagnostic) => (
+             <p key={`${diagnostic.code}-${diagnostic.sourceKey}`} className="rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-800">
+               {`${diagnostic.code.replace(/_/g, " ").replace(/^./, (letter) => letter.toUpperCase())}: ${diagnostic.sourceKey}`}
+             </p>
+           ))}
+           {artifact && missingPlanningValues.map((value) => (
             <Fragment key={value}>
               <p className="text-sm text-slate-600">{`${formatPlanningValueLabel(value)} is required.`}</p>
               <FormField label={formatPlanningValueLabel(value)}>
@@ -199,7 +225,7 @@ export function App() {
           <div className="mt-4 grid gap-2">
             {jobs.map((job) => (
               <div key={job.id} className="flex items-center justify-between gap-4 rounded-xl border border-slate-200 px-4 py-3">
-                <strong>{job.executionData.artifactRef === artifact?.id ? artifact.filename : job.executionData.artifactRef}</strong>
+                <strong>{job.executionData.artifactFilename ?? (job.executionData.artifactRef === artifact?.id ? artifact.filename : "Legacy G-code job")}</strong>
                 <StatusPill tone="ready">{job.state}</StatusPill>
               </div>
             ))}

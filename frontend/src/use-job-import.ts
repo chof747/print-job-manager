@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 import {
   createJob,
@@ -11,11 +11,30 @@ import {
 
 export function useJobImport(apiBaseUrl: string | null) {
   const [artifact, setArtifact] = useState<ImportedArtifact | null>(null);
+  const [extractedMetadata, setExtractedMetadata] = useState<Record<string, string | number>>({});
+  const [provenance, setProvenance] = useState<Record<string, { parser: string; sourceKey: string }>>({});
+  const [diagnostics, setDiagnostics] = useState<Array<{ code: string; sourceKey: string }>>([]);
   const [missingPlanningValues, setMissingPlanningValues] = useState<string[]>([]);
   const [jobs, setJobs] = useState<Job[]>([]);
   const [createError, setCreateError] = useState<string | null>(null);
   const [isCreated, setIsCreated] = useState(false);
   const [isImporting, setIsImporting] = useState(false);
+  const queueRequestVersion = useRef(0);
+
+  useEffect(() => {
+    if (!apiBaseUrl) {
+      return;
+    }
+
+    const requestVersion = ++queueRequestVersion.current;
+    void fetchQueue(apiBaseUrl)
+      .then((queue) => {
+        if (requestVersion === queueRequestVersion.current) {
+          setJobs(queue.jobs);
+        }
+      })
+      .catch(() => {});
+  }, [apiBaseUrl]);
 
   async function importFile(file: File | undefined) {
     if (!apiBaseUrl || !file) {
@@ -26,6 +45,9 @@ export function useJobImport(apiBaseUrl: string | null) {
     try {
       const result = await importGcode(apiBaseUrl, file);
       setArtifact(result.artifact);
+      setExtractedMetadata(result.extractedMetadata ?? {});
+      setProvenance(result.provenance ?? {});
+      setDiagnostics(result.diagnostics ?? []);
       setMissingPlanningValues(result.missingPlanningValues);
       setCreateError(null);
       setIsCreated(false);
@@ -45,8 +67,11 @@ export function useJobImport(apiBaseUrl: string | null) {
       await createJob(apiBaseUrl, artifactId, planningValues);
       jobCreated = true;
       setCreateError(null);
+      const requestVersion = ++queueRequestVersion.current;
       const queue = await fetchQueue(apiBaseUrl);
-      setJobs(queue.jobs);
+      if (requestVersion === queueRequestVersion.current) {
+        setJobs(queue.jobs);
+      }
       setIsCreated(true);
     } catch (error: unknown) {
       if (jobCreated) {
@@ -72,5 +97,5 @@ export function useJobImport(apiBaseUrl: string | null) {
     }
   }
 
-  return { artifact, missingPlanningValues, jobs, createError, isCreated, isImporting, importFile, create };
+  return { artifact, extractedMetadata, provenance, diagnostics, missingPlanningValues, jobs, createError, isCreated, isImporting, importFile, create };
 }

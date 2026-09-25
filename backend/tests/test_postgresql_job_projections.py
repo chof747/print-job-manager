@@ -118,7 +118,7 @@ def test_import_to_ready_job_persists_the_artifact_snapshot_and_creation_history
         with admin_engine.connect() as connection:
             connection.execute(sa.text(f'SET search_path TO "{schema}"'))
             artifact = (
-                connection.execute(sa.text("SELECT id, sha256 FROM artifacts"))
+                connection.execute(sa.text("SELECT id, sha256, filename FROM artifacts"))
                 .mappings()
                 .one()
             )
@@ -147,6 +147,7 @@ def test_import_to_ready_job_persists_the_artifact_snapshot_and_creation_history
         assert artifact == {
             "id": imported.json()["artifact"]["id"],
             "sha256": hashlib.sha256(content).hexdigest(),
+            "filename": "calibration-cube.gcode",
         }
         assert persisted_job == {
             "artifact_ref": artifact["id"],
@@ -236,6 +237,7 @@ def test_fresh_backend_creates_a_job_from_a_persisted_import_with_its_metadata_s
         assert detail.status_code == 200
         assert detail.json()["executionData"] == {
             "artifactRef": artifact_id,
+            "artifactFilename": "calibration-cube.gcode",
             "material": None,
             "extractedMetadata": {"estimatedDuration": 3600},
         }

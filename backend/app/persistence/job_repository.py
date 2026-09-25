@@ -76,6 +76,7 @@ class SqlAlchemyJobRepository:
         return {
             "id": record.id,
             "state": record.state,
+            "parsedMetadataSnapshot": deepcopy(record.parsed_metadata_snapshot),
             "executionData": deepcopy(record.execution_data),
             "schedulingData": deepcopy(record.scheduling_data),
         }
