@@ -14,9 +14,13 @@ export type ImportGcodeResult = {
 export type Job = {
   id: string;
   state: string;
+  version: number;
   executionData: {
     artifactRef: string;
     artifactFilename?: string;
+  };
+  schedulingData: {
+    priority: number;
   };
 };
 
@@ -83,4 +87,22 @@ export async function fetchQueue(apiBaseUrl: string): Promise<Queue> {
   }
 
   return response.json() as Promise<Queue>;
+}
+
+export async function updateJobScheduling(
+  apiBaseUrl: string,
+  jobId: string,
+  schedulingData: { priority: number; expectedVersion: number },
+): Promise<Job> {
+  const response = await fetch(`${apiBaseUrl}/jobs/${jobId}/scheduling`, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(schedulingData),
+  });
+
+  if (!response.ok) {
+    throw new Error("Unable to update job scheduling");
+  }
+
+  return response.json() as Promise<Job>;
 }

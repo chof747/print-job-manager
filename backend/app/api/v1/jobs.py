@@ -3,17 +3,21 @@ import os
 import re
 import tempfile
 from copy import deepcopy
+from datetime import date
 from pathlib import Path
 from threading import Lock
-from typing import Protocol
+from typing import Literal, Protocol
 
 from fastapi import APIRouter, File, HTTPException, Response, UploadFile, status
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 from sqlalchemy import select
 
 from ...config import get_settings
 from ...persistence.database import SessionFactory
-from ...persistence.job_repository import SqlAlchemyJobRepository
+from ...persistence.job_repository import (
+    SchedulingVersionConflict,
+    SqlAlchemyJobRepository,
+)
 from ...persistence.models import ArtifactRecord
 
 router = APIRouter()
@@ -23,6 +27,31 @@ class CreateJobRequest(BaseModel):
     model_config = ConfigDict(extra="allow")
 
     material: str | None = None
+
+
+class PreferredPrinterAssignment(BaseModel):
+    mode: Literal["preferred"]
+    printer_id: str = Field(alias="printerId")
+
+
+class UpdateSchedulingRequest(BaseModel):
+    expected_version: int = Field(alias="expectedVersion")
+    priority: int | None = None
+    due_date: date | None = Field(default=None, alias="dueDate")
+    notes: str | None = None
+    tags: list[str] | None = None
+    printer_assignment: PreferredPrinterAssignment | None = Field(
+        default=None, alias="printerAssignment"
+    )
+
+    @model_validator(mode="before")
+    @classmethod
+    def reject_execution_data_changes(cls, value: object) -> object:
+        if isinstance(value, dict) and "executionData" in value:
+            raise ValueError(
+                "executionData is immutable after queueing; create a replacement job instead"
+            )
+        return value
 
 
 class ArtifactStorage(Protocol):
@@ -57,6 +86,14 @@ class JobRepository(Protocol):
     def active_queue(self) -> dict[str, list[object]]: ...
 
     def get_job(self, job_id: str) -> dict[str, object] | None: ...
+
+    def update_scheduling(
+        self,
+        *,
+        job_id: str,
+        scheduling_data: dict[str, object],
+        expected_version: int | None,
+    ) -> dict[str, object] | None: ...
 
 
 class InMemoryStorage:
@@ -369,6 +406,32 @@ class InMemoryJobRepository:
                     return deepcopy(job)
         return None
 
+    def update_scheduling(
+        self,
+        *,
+        job_id: str,
+        scheduling_data: dict[str, object],
+        expected_version: int | None,
+    ) -> dict[str, object] | None:
+        with self.lock:
+            for job in self.active_jobs:
+                if job["id"] == job_id:
+                    current_version = job["version"]
+                    if not isinstance(current_version, int):
+                        raise TypeError("version must be an integer")
+                    if (
+                        expected_version is not None
+                        and expected_version != current_version
+                    ):
+                        raise SchedulingVersionConflict(current_version)
+                    current_scheduling_data = job["schedulingData"]
+                    if not isinstance(current_scheduling_data, dict):
+                        raise TypeError("schedulingData must be an object")
+                    current_scheduling_data.update(deepcopy(scheduling_data))
+                    job["version"] = current_version + 1
+                    return deepcopy(job)
+        return None
+
 
 class ImportService:
     def __init__(
@@ -510,6 +573,7 @@ class ImportService:
         job: dict[str, object] = {
             "id": f"job-{artifact_id}",
             "state": "ready",
+            "version": 0,
             "executionData": execution_data,
             "schedulingData": {"priority": 0},
         }
@@ -523,6 +587,19 @@ class ImportService:
 
     def get_job(self, job_id: str) -> dict[str, object] | None:
         return self.job_repository.get_job(job_id)
+
+    def update_scheduling(
+        self,
+        *,
+        job_id: str,
+        scheduling_data: dict[str, object],
+        expected_version: int | None,
+    ) -> dict[str, object] | None:
+        return self.job_repository.update_scheduling(
+            job_id=job_id,
+            scheduling_data=scheduling_data,
+            expected_version=expected_version,
+        )
 
 
 def _missing_planning_values(parsed: dict[str, object]) -> list[str]:
@@ -576,6 +653,28 @@ def queue() -> dict[str, list[object]]:
 @router.get("/jobs/{job_id}")
 def job_detail(job_id: str) -> dict[str, object]:
     job = get_import_service().get_job(job_id)
+    if job is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND)
+    return job
+
+
+@router.patch("/jobs/{job_id}/scheduling")
+def update_job_scheduling(
+    job_id: str, request: UpdateSchedulingRequest
+) -> dict[str, object]:
+    scheduling_data = request.model_dump(by_alias=True, exclude_unset=True)
+    expected_version = scheduling_data.pop("expectedVersion", None)
+    try:
+        job = get_import_service().update_scheduling(
+            job_id=job_id,
+            scheduling_data=scheduling_data,
+            expected_version=expected_version,
+        )
+    except SchedulingVersionConflict as error:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail={"code": "version_conflict", "currentVersion": error.current_version},
+        ) from error
     if job is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND)
     return job

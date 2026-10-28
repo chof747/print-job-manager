@@ -26,7 +26,9 @@ export function App() {
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [importError, setImportError] = useState<string | null>(null);
   const [planningValues, setPlanningValues] = useState<Record<string, string>>({});
-  const { artifact, extractedMetadata, provenance, diagnostics, missingPlanningValues, jobs, createError, isCreated, isImporting, importFile, create } = useJobImport(apiBaseUrl);
+  const [editingJobId, setEditingJobId] = useState<string | null>(null);
+  const [priority, setPriority] = useState("");
+  const { artifact, extractedMetadata, provenance, diagnostics, missingPlanningValues, jobs, createError, isCreated, isImporting, importFile, create, updateScheduling } = useJobImport(apiBaseUrl);
 
   useEffect(() => {
     let isActive = true;
@@ -117,6 +119,10 @@ export function App() {
     }
 
     await create(artifact.id, planningValues);
+  }
+
+  async function handleSaveScheduling(job: (typeof jobs)[number]) {
+    await updateScheduling(job, Number(priority));
   }
 
   const formatPlanningValueLabel = (value: string) => value.replace(/([a-z])([A-Z])/g, "$1 $2");
@@ -224,9 +230,38 @@ export function App() {
           <p className="mt-1 text-sm text-slate-500">The queue is the scheduler's projection of active jobs.</p>
           <div className="mt-4 grid gap-2">
             {jobs.map((job) => (
-              <div key={job.id} className="flex items-center justify-between gap-4 rounded-xl border border-slate-200 px-4 py-3">
-                <strong>{job.executionData.artifactFilename ?? (job.executionData.artifactRef === artifact?.id ? artifact.filename : "Legacy G-code job")}</strong>
-                <StatusPill tone="ready">{job.state}</StatusPill>
+              <div key={job.id} className="rounded-xl border border-slate-200 px-4 py-3">
+                <div className="flex items-center justify-between gap-4">
+                  <strong>{job.executionData.artifactFilename ?? (job.executionData.artifactRef === artifact?.id ? artifact.filename : "Legacy G-code job")}</strong>
+                  <StatusPill tone="ready">{job.state}</StatusPill>
+                </div>
+                {job.state === "ready" && (
+                  editingJobId === job.id ? (
+                    <div className="mt-3 flex items-end gap-3">
+                      <FormField label="Priority">
+                        <input
+                          type="number"
+                          className="rounded-xl border border-slate-300 bg-white px-3 py-2 text-slate-900 shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-400"
+                          value={priority}
+                          onChange={(event) => setPriority(event.target.value)}
+                        />
+                      </FormField>
+                      <Button type="button" onClick={() => void handleSaveScheduling(job)}>Save scheduling</Button>
+                    </div>
+                  ) : (
+                    <Button
+                      type="button"
+                      variant="secondary"
+                      className="mt-3"
+                      onClick={() => {
+                        setEditingJobId(job.id);
+                        setPriority(String(job.schedulingData.priority));
+                      }}
+                    >
+                      Edit scheduling
+                    </Button>
+                  )
+                )}
               </div>
             ))}
             {!jobs.length && <p className="rounded-xl bg-slate-50 px-4 py-3 text-sm text-slate-500">No active jobs yet.</p>}

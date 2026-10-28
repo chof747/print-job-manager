@@ -7,6 +7,7 @@ import {
   type ImportedArtifact,
   type Job,
   type PlanningValues,
+  updateJobScheduling,
 } from "./job-import-api-client";
 
 export function useJobImport(apiBaseUrl: string | null) {
@@ -97,5 +98,17 @@ export function useJobImport(apiBaseUrl: string | null) {
     }
   }
 
-  return { artifact, extractedMetadata, provenance, diagnostics, missingPlanningValues, jobs, createError, isCreated, isImporting, importFile, create };
+  async function updateScheduling(job: Job, priority: number) {
+    if (!apiBaseUrl) {
+      return;
+    }
+
+    const updatedJob = await updateJobScheduling(apiBaseUrl, job.id, {
+      priority,
+      expectedVersion: job.version,
+    });
+    setJobs((currentJobs) => currentJobs.map((currentJob) => currentJob.id === updatedJob.id ? updatedJob : currentJob));
+  }
+
+  return { artifact, extractedMetadata, provenance, diagnostics, missingPlanningValues, jobs, createError, isCreated, isImporting, importFile, create, updateScheduling };
 }
