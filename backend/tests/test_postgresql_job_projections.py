@@ -118,16 +118,15 @@ def test_import_to_ready_job_persists_the_artifact_snapshot_and_creation_history
         with admin_engine.connect() as connection:
             connection.execute(sa.text(f'SET search_path TO "{schema}"'))
             artifact = (
-                connection.execute(sa.text("SELECT id, sha256, filename FROM artifacts"))
+                connection.execute(
+                    sa.text("SELECT id, sha256, filename FROM artifacts")
+                )
                 .mappings()
                 .one()
             )
             persisted_job = (
                 connection.execute(
-                    sa.text(
-                        "SELECT artifact_ref, parsed_metadata_snapshot, state FROM jobs "
-                        "WHERE id = :job_id"
-                    ),
+                    sa.text("SELECT artifact_ref, state FROM jobs WHERE id = :job_id"),
                     {"job_id": job["id"]},
                 )
                 .mappings()
@@ -151,11 +150,13 @@ def test_import_to_ready_job_persists_the_artifact_snapshot_and_creation_history
         }
         assert persisted_job == {
             "artifact_ref": artifact["id"],
-            "parsed_metadata_snapshot": {
-                "missingPlanningValues": ["material"],
-                "diagnostics": [],
-            },
             "state": "ready",
+        }
+        assert jobs.SqlAlchemyImportRepository().load_import(artifact["id"])[
+            "parsed"
+        ] == {
+            "missingPlanningValues": ["material"],
+            "diagnostics": [],
         }
         assert history == {"job_id": job["id"], "state": "ready"}
     finally:
@@ -256,7 +257,12 @@ def test_created_job_is_loaded_by_fresh_backend_detail_and_queue_projections(
             "PRINT_JOB_MANAGER_TEST_DATABASE_URL must name a disposable PostgreSQL database"
         )
 
-    monkeypatch.setenv("PRINT_JOB_MANAGER_DATABASE_URL", database_url)
+    schema = f"test_restart_{uuid4().hex}"
+    admin_engine = sa.create_engine(database_url)
+    with admin_engine.begin() as connection:
+        connection.execute(sa.text(f'CREATE SCHEMA "{schema}"'))
+    scoped_database_url = f"{database_url}?options=-csearch_path={schema}"
+    monkeypatch.setenv("PRINT_JOB_MANAGER_DATABASE_URL", scoped_database_url)
 
     from backend.app import config as app_config
     from backend.app import main
@@ -276,9 +282,9 @@ def test_created_job_is_loaded_by_fresh_backend_detail_and_queue_projections(
     alembic_config.set_main_option(
         "script_location", str(repo_root / "backend" / "alembic")
     )
-    alembic_config.set_main_option("sqlalchemy.url", database_url)
-    command.upgrade(alembic_config, "head")
+    alembic_config.set_main_option("sqlalchemy.url", scoped_database_url)
     try:
+        command.upgrade(alembic_config, "head")
         with TestClient(reloaded_main.app, raise_server_exceptions=False) as client:
             imported = client.post(
                 "/api/v1/import",
@@ -304,7 +310,13 @@ def test_created_job_is_loaded_by_fresh_backend_detail_and_queue_projections(
         assert detail.json() == created_job
         assert queue.json() == {"jobs": [created_job]}
     finally:
-        command.downgrade(alembic_config, "base")
+        try:
+            command.downgrade(alembic_config, "base")
+        finally:
+            database.engine.dispose()
+            with admin_engine.begin() as connection:
+                connection.execute(sa.text(f'DROP SCHEMA "{schema}" CASCADE'))
+            admin_engine.dispose()
 
 
 def test_default_api_import_is_isolated_after_projection_database_cleanup(

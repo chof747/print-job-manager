@@ -52,7 +52,7 @@ def test_importing_a_gcode_file_with_a_generic_browser_media_type_is_accepted(
 
     assert response.status_code == 201
     assert response.json()["artifact"] == {
-        "id": f"sha256:{hashlib.sha256(content).hexdigest()}",
+        "id": hashlib.sha256(content).hexdigest(),
         "filename": "calibration-cube.gcode",
         "mediaType": "application/octet-stream",
     }
@@ -76,7 +76,7 @@ def test_importing_gcode_returns_its_canonical_artifact_and_missing_material_wit
     assert response.status_code == 201
     assert response.json() == {
         "artifact": {
-            "id": f"sha256:{hashlib.sha256(content).hexdigest()}",
+            "id": hashlib.sha256(content).hexdigest(),
             "filename": "calibration-cube.gcode",
             "mediaType": "text/x.gcode",
         },
@@ -390,7 +390,9 @@ def test_supported_short_duration_metadata_is_normalized(
     }
 
 
-def test_creating_a_job_retains_the_imported_parser_snapshot(client: TestClient) -> None:
+def test_creating_a_job_retains_the_imported_parser_snapshot(
+    client: TestClient,
+) -> None:
     import_response = client.post(
         "/api/v1/import",
         files={
@@ -489,7 +491,7 @@ def test_importing_gcode_stores_bytes_by_their_sha256_content_identity(
     )
 
     artifact_id = imported["artifact"]["id"]
-    assert artifact_id == f"sha256:{hashlib.sha256(content).hexdigest()}"
+    assert artifact_id == hashlib.sha256(content).hexdigest()
     assert storage.retrieve(artifact_id) == content
 
 
@@ -506,6 +508,32 @@ def test_retrieving_a_tampered_filesystem_artifact_detects_the_sha256_mismatch(
 
     with pytest.raises(ValueError, match="sha256"):
         storage.retrieve(artifact_id)
+
+
+def test_multiple_jobs_can_reuse_one_artifact_with_independent_ids(
+    client: TestClient,
+) -> None:
+    imported = client.post(
+        "/api/v1/import",
+        files={"file": ("cube.gcode", b"G28\n", "text/x.gcode")},
+    )
+    assert imported.status_code == 201
+    artifact_id = imported.json()["artifact"]["id"]
+
+    with TestClient(client.app, raise_server_exceptions=False) as api:
+        first = api.post(f"/api/v1/import/{artifact_id}/jobs", json={"material": "PLA"})
+        second = api.post(
+            f"/api/v1/import/{artifact_id}/jobs", json={"material": "PLA"}
+        )
+
+    assert first.status_code == 201
+    assert second.status_code == 201
+    first_job, second_job = first.json(), second.json()
+    assert first_job["id"] != second_job["id"]
+    assert artifact_id not in first_job["id"]
+    assert artifact_id not in second_job["id"]
+    assert first_job["executionData"]["artifactRef"] == artifact_id
+    assert second_job["executionData"]["artifactRef"] == artifact_id
 
 
 def test_active_queue_projection_survives_an_application_restart(
@@ -799,7 +827,7 @@ def test_creating_a_complete_job_exposes_the_ready_job_in_the_active_queue_proje
     assert queue_response.json() == {"jobs": [create_response.json()]}
 
 
-def test_repeating_job_creation_for_one_import_returns_the_existing_ready_job_without_duplicating_the_queue(
+def test_repeating_job_creation_for_one_import_adds_distinct_ready_jobs_to_queue(
     client: TestClient,
 ) -> None:
     import_response = client.post(
@@ -816,14 +844,14 @@ def test_repeating_job_creation_for_one_import_returns_the_existing_ready_job_wi
     )
 
     assert first_create_response.status_code == 201
-    assert repeated_create_response.status_code == 200
-    assert repeated_create_response.json() == first_create_response.json()
+    assert repeated_create_response.status_code == 201
+    assert repeated_create_response.json()["id"] != first_create_response.json()["id"]
     assert client.get("/api/v1/queue").json() == {
-        "jobs": [first_create_response.json()]
+        "jobs": [first_create_response.json(), repeated_create_response.json()]
     }
 
 
-def test_two_create_requests_for_one_import_create_only_one_ready_queue_record(
+def test_concurrent_create_requests_for_one_import_create_distinct_ready_jobs(
     client: TestClient,
 ) -> None:
     import_response = client.post(
@@ -842,8 +870,12 @@ def test_two_create_requests_for_one_import_create_only_one_ready_queue_record(
             )
         )
 
-    assert sorted(response.status_code for response in responses) == [200, 201]
-    assert client.get("/api/v1/queue").json() == {"jobs": [responses[0].json()]}
+    assert [response.status_code for response in responses] == [201, 201]
+    expected = {response.json()["id"] for response in responses}
+    assert len(expected) == 2
+    queued = client.get("/api/v1/queue").json()["jobs"]
+    assert len(queued) == 2
+    assert {job["id"] for job in queued} == expected
 
 
 def test_active_queue_retains_two_ready_jobs_in_creation_order(
