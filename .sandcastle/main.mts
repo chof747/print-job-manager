@@ -2,7 +2,9 @@ import { run, opencode } from "@ai-hero/sandcastle";
 import { docker } from "@ai-hero/sandcastle/sandboxes/docker";
 import { noSandbox } from "@ai-hero/sandcastle/sandboxes/no-sandbox";
 import { execFileSync } from "node:child_process";
-import { mkdirSync } from "node:fs";
+import { randomUUID } from "node:crypto";
+import { mkdirSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
 import { isAbsolute, relative, resolve, sep } from "node:path";
 
 type GitHubIssue = {
@@ -326,7 +328,12 @@ if (useDockerSandbox) {
   mkdirSync(dockerNodeModulesPath, { recursive: true });
 }
 
-const sandbox = useDockerSandbox
+const authExportDir = useDockerSandbox
+  ? resolve(tmpdir(), `sandcastle-auth-${randomUUID()}`)
+  : undefined;
+const authExportPath = authExportDir ? resolve(authExportDir, "auth.json") : "";
+
+const createSandbox = () => useDockerSandbox
   ? docker({
       imageName: "sandcastle:print-job-manager",
       containerUid,
@@ -355,7 +362,7 @@ const sandbox = useDockerSandbox
           sandboxPath: "node_modules",
         },
         {
-          hostPath: "~/.local/share/opencode/auth.json",
+          hostPath: authExportPath,
           sandboxPath: "/home/agent/host-auth/auth.json",
           readonly: true,
         },
@@ -392,13 +399,18 @@ if (process.env.SANDCASTLE_DRY_RUN === "true") {
 }
 
 try {
+  if (authExportDir) {
+    mkdirSync(authExportDir, { mode: 0o700 });
+    const credentials = execFileSync("opencode", ["auth", "export", "openai"]);
+    writeFileSync(authExportPath, credentials, { mode: 0o600 });
+  }
   await run({
-    agent: opencode("openai/gpt-5.6-terra"),
+    agent: opencode("openai/gpt-6.1-terra"),
     branchStrategy,
     ...(existingWorktreePath ? { cwd: existingWorktreePath } : {}),
     idleTimeoutSeconds,
     maxIterations,
-    sandbox,
+    sandbox: createSandbox(),
     ...(useDockerSandbox
       ? {
           hooks: {
@@ -406,7 +418,7 @@ try {
               onSandboxReady: [
                 {
                   command:
-                    "mkdir -p .sandcastle/tmp/sandbox-tmp .sandcastle/tmp/xdg-config .sandcastle/tmp/opencode-state .sandcastle/tmp/opencode-cache .sandcastle/tmp/uv-cache .sandcastle/tmp/npm-cache .sandcastle/tmp/pnpm-home/bin .sandcastle/tmp/pnpm-store /home/agent/.local/share/opencode/log && cp /home/agent/host-auth/auth.json /home/agent/.local/share/opencode/auth.json && gh auth setup-git",
+                    "mkdir -p .sandcastle/tmp/sandbox-tmp .sandcastle/tmp/xdg-config .sandcastle/tmp/opencode-state .sandcastle/tmp/opencode-cache .sandcastle/tmp/uv-cache .sandcastle/tmp/npm-cache .sandcastle/tmp/pnpm-home/bin .sandcastle/tmp/pnpm-store /home/agent/.local/share/opencode/log && opencode auth import /home/agent/host-auth/auth.json && gh auth setup-git",
                 },
                 {
                   command:
@@ -440,6 +452,9 @@ try {
     },
   });
 } finally {
+  if (authExportDir) {
+    rmSync(authExportDir, { recursive: true, force: true });
+  }
   if (selectedIssue && issueBranch) {
     removeFinalizedWorktree(selectedIssue, issueBranch);
   }

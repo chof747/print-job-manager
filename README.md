@@ -43,6 +43,10 @@ Build the local Sandcastle Docker image after changing `.sandcastle/Dockerfile`:
 pnpm run sandcastle:docker:build
 ```
 
+The Dockerfile pins the OpenCode CLI version (`@opencode/cli`). When upgrading OpenCode to a new major version or another breaking release, update that pin to the compatible version before rebuilding the image. Do not use the legacy `opencode-ai` package: it installs OpenCode 1.x and is incompatible with the V2 OAuth credentials used by Sandcastle.
+
+Docker runs export the host's OpenAI account with `opencode auth export openai` and import it into the sandbox using OpenCode V2's credential commands. Connect OpenAI on the host first (`opencode auth login openai`). The temporary export contains secrets and is removed when the run exits normally; if the process is forcibly terminated, remove any leftover `sandcastle-auth-*` directory from the system temporary directory securely.
+
 ### Start A New Build
 
 Run the next open issue labeled `ready-for-agent`:
