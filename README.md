@@ -17,6 +17,40 @@ Run the backend test suite from the repo root:
 pnpm run check:backend
 ```
 
+The full suite requires a running PostgreSQL server and a **disposable**, separate
+test database. By default, its URL comes from `PRINT_JOB_MANAGER_DATABASE_URL`,
+with `_test` appended to the database name. Create that database first, or set
+`PRINT_JOB_MANAGER_TEST_DATABASE_URL` in `backend/.env` (see `backend/.env.example`)
+or in the environment to choose a different disposable database.
+The database user must be able to create and drop schemas. The command runs the
+PostgreSQL tests rather than silently skipping them; it does not create the database.
+Tests migrate and downgrade their schemas, so never use a database with valuable data.
+
+### Disposable database for manual PR testing
+
+With `PRINT_JOB_MANAGER_DATABASE_URL` in `backend/.env` pointing to the original
+database, stop the backend and disconnect other clients from it, then run:
+
+```sh
+pnpm run db:clone 61
+```
+
+Replace `61` with the PR number. This creates `<original>_pr_61` from the original database, including its data,
+schemas and object permissions, and copies database ownership and grants. PostgreSQL
+roles are cluster-wide and are reused. The connecting role needs permission to
+clone the source, assign the owner, and reproduce its grants. Existing clones are
+never overwritten. If grant copying fails, the incomplete clone is left for inspection.
+If the application role lacks these privileges, set `PRINT_JOB_MANAGER_ADMIN_DATABASE_URL`
+in `backend/.env` to a privileged connection on the same server; the application URL
+still determines which database to clone. The admin connection is also used to dispose
+of the clone.
+
+Copy the artifact-storage directory separately, then configure the PR backend to
+use the clone and copied storage before running migrations. When finished, stop
+clients connected to the clone, restore the **original** database URL in
+`backend/.env`, and run `pnpm run db:dispose 61` with the same PR number. Type the clone name when prompted;
+this permanently deletes the clone, not its separately copied artifact files.
+
 Start the FastAPI backend dev server from the repo root:
 
 ```sh

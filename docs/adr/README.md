@@ -30,6 +30,7 @@ ADRs capture decisions that materially shape the system and would be costly or c
 | [0013](0013-use-numeric-job-priority.md) | Job priority is numeric | Accepted |
 | [0014](0014-check-inventory-at-assignment-time.md) | Inventory is checked during eligibility and reserved when an assignment is created | Accepted |
 | [0015](0015-separate-fastapi-app-assembly-from-route-modules.md) | FastAPI app assembly is separate from route modules | Accepted |
+| [0016](0016-distinguish-artifact-and-job-identity.md) | Artifact identity is distinct from print-job identity | Accepted |
 
 ## Creating a New ADR
 

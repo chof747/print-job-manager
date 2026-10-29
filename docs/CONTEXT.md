@@ -49,11 +49,15 @@ The system does not:
 
 ### Print Job
 
-A validated request to execute one uploaded G-code file. A job contains immutable execution data, mutable scheduling data, and a lifecycle state.
+A validated request to execute one uploaded G-code file. A job has its own identity, independent of its artifact, and contains immutable execution data, mutable scheduling data, and a lifecycle state. Multiple jobs can reference the same artifact.
 
 ### G-code File
 
 The canonical artifact executed by a printer. The application may read embedded metadata but does not modify or fully interpret the file.
+
+### Artifact
+
+The stored G-code content, identified by its SHA-256 digest. Identical content shares an artifact identity; that identity does not identify a print job or its lifecycle.
 
 ### Extracted Metadata
 

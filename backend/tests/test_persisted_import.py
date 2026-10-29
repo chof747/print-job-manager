@@ -1,9 +1,35 @@
+import hashlib
 import importlib
 from pathlib import Path
-from typing import Any, Self, cast
+from typing import Any, cast
 
 import pytest
+from fastapi.testclient import TestClient
+
 from backend.app.api.v1 import jobs
+
+
+def test_import_returns_raw_sha256_identifier_for_stored_artifact(
+    tmp_path: Path,
+) -> None:
+    content = b"G28\nG1 X10 Y10\n"
+    storage = jobs.FileSystemStorage(tmp_path / "artifacts")
+    service = jobs.ImportService(
+        storage=storage,
+        repository=jobs.InMemoryImportRepository(),
+        job_repository=jobs.InMemoryJobRepository(),
+    )
+
+    imported = cast(
+        dict[str, Any],
+        service.import_gcode(
+            filename="cube.gcode", media_type="text/x.gcode", content=content
+        ),
+    )
+
+    artifact_id = hashlib.sha256(content).hexdigest()
+    assert imported["artifact"]["id"] == artifact_id
+    assert storage.retrieve(artifact_id) == content
 
 
 def test_uploaded_gcode_remains_available_from_artifact_storage_after_service_restart() -> (
@@ -197,41 +223,18 @@ def test_invalid_parser_output_does_not_leave_a_newly_written_artifact(
     assert not storage_path.exists() or list(storage_path.iterdir()) == []
 
 
-def test_sqlalchemy_import_repository_persists_uploaded_filename(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    stored_records: list[object] = []
-
-    class Session:
-        def __enter__(self) -> Self:
-            return self
-
-        def __exit__(
-            self, exc_type: object, exc_value: object, traceback: object
-        ) -> None:
-            del exc_type, exc_value, traceback
-
-        def merge(self, record: object) -> None:
-            stored_records.append(record)
-
-    class SessionFactory:
-        def begin(self) -> Session:
-            return Session()
-
-    class ArtifactRecord:
-        def __init__(self, **values: object) -> None:
-            self.values = values
-
-    monkeypatch.setattr(jobs, "SessionFactory", SessionFactory())
-    monkeypatch.setattr(jobs, "ArtifactRecord", ArtifactRecord)
-
-    jobs.SqlAlchemyImportRepository().save_import(
-        artifact_id="sha256:artifact",
-        filename="calibration-cube.gcode",
-        media_type="text/x.gcode",
-        parsed={"missingPlanningValues": [], "diagnostics": []},
+def test_uploaded_filename_is_persisted_for_job_creation(client: TestClient) -> None:
+    imported = client.post(
+        "/api/v1/import",
+        files={"file": ("calibration-cube.gcode", b"G28\n", "text/x.gcode")},
     )
-
-    assert len(stored_records) == 1
-    assert isinstance(stored_records[0], ArtifactRecord)
-    assert stored_records[0].values["filename"] == "calibration-cube.gcode"
+    assert imported.status_code == 201
+    artifact_id = imported.json()["artifact"]["id"]
+    jobs.import_service = jobs.ImportService()
+    created = client.post(
+        f"/api/v1/import/{artifact_id}/jobs", json={"material": "PLA"}
+    )
+    assert created.status_code == 201
+    assert (
+        created.json()["executionData"]["artifactFilename"] == "calibration-cube.gcode"
+    )
