@@ -23,7 +23,7 @@ from sqlalchemy import (
     func,
 )
 from sqlalchemy.dialects.postgresql import ARRAY
-from sqlalchemy.orm import DeclarativeBase, Mapped, Session, mapped_column, relationship
+from sqlalchemy.orm import DeclarativeBase, Mapped, Session, mapped_column
 from sqlalchemy.types import TypeDecorator
 
 revision = "20261028_0009"
@@ -192,9 +192,6 @@ class JobRecord(SnapshotFacts, Base):
     queue_position: Mapped[int] = mapped_column(
         BigInteger, Identity(always=True), unique=True, nullable=False
     )
-    planning_facts: Mapped[list["JobPlanningFact"]] = relationship(
-        cascade="all, delete-orphan"
-    )
 
     @property
     def execution_data(self):
@@ -207,8 +204,6 @@ class JobRecord(SnapshotFacts, Base):
             result["artifactFilename"] = self.artifact_filename
         if self.nozzle_diameter is not None:
             result["nozzleDiameter"] = self.nozzle_diameter
-        for fact in self.planning_facts:
-            result[fact.name] = fact.value
         if self.execution_has_extracted:
             result["extractedMetadata"] = {
                 key: value
@@ -225,18 +220,6 @@ class JobRecord(SnapshotFacts, Base):
     def execution_data(self, value):
         if not isinstance(value, dict):
             raise TypeError("Execution data must be an object")
-        known = {
-            "artifactRef",
-            "material",
-            "artifactFilename",
-            "extractedMetadata",
-            "nozzleDiameter",
-        }
-        self.planning_facts = [
-            JobPlanningFact.from_value(key, item)
-            for key, item in value.items()
-            if key not in known
-        ]
         self.execution_has_artifact_ref = "artifactRef" in value
         self.execution_has_material = "material" in value
         self.artifact_ref = value.get("artifactRef", self.artifact_ref)
@@ -258,56 +241,6 @@ class JobRecord(SnapshotFacts, Base):
     def scheduling_data(self, value):
         _keys(value, {"priority"}, required=True)
         self.priority = value["priority"]
-
-
-class JobPlanningFact(Base):
-    __tablename__ = "job_planning_facts"
-    __table_args__ = (
-        CheckConstraint(
-            "num_nonnulls(text_value, integer_value, float_value, boolean_value) <= 1",
-            name="ck_planning_one_value",
-        ),
-        CheckConstraint(
-            "integer_value IS NULL OR (integer_value = trunc(integer_value) AND integer_value > '-Infinity'::numeric AND integer_value < 'Infinity'::numeric)",
-            name="ck_planning_integer",
-        ),
-    )
-    job_id: Mapped[str] = mapped_column(
-        ForeignKey("jobs.id", ondelete="CASCADE"), primary_key=True
-    )
-    name: Mapped[str] = mapped_column(Text, primary_key=True)
-    text_value: Mapped[str | None] = mapped_column(Text)
-    integer_value: Mapped[int | None] = mapped_column(NumericInteger())
-    float_value: Mapped[float | None] = mapped_column(Float)
-    boolean_value: Mapped[bool | None] = mapped_column(Boolean)
-
-    @property
-    def value(self):
-        for value in (
-            self.text_value,
-            self.integer_value,
-            self.float_value,
-            self.boolean_value,
-        ):
-            if value is not None:
-                return value
-        return None
-
-    @classmethod
-    def from_value(cls, name, value):
-        if not isinstance(name, str):
-            raise TypeError("Planning fact names must be strings")
-        if value is None:
-            return cls(name=name)
-        if isinstance(value, bool):
-            return cls(name=name, boolean_value=value)
-        if isinstance(value, int):
-            return cls(name=name, integer_value=value)
-        if isinstance(value, float):
-            return cls(name=name, float_value=value)
-        if isinstance(value, str):
-            return cls(name=name, text_value=value)
-        raise ValueError("Nested planning values cannot be safely persisted")
 
 
 class JobHistoryRecord(Base):
@@ -445,7 +378,6 @@ def upgrade():
             op.add_column(table, sa.Column(name, type_, nullable=True))
     for name, type_ in JOB_COLUMNS.items():
         op.add_column("jobs", sa.Column(name, type_, nullable=True))
-    JobPlanningFact.__table__.create(connection, checkfirst=True)
     with Session(bind=connection) as session:
         for model, table in (
             (ArtifactRecord, "artifact_data_nodes"),
@@ -465,6 +397,20 @@ def upgrade():
                 if model is JobRecord:
                     execution = decode(nodes, "execution")
                     scheduling = decode(nodes, "scheduling")
+                    # Unknown legacy planning data is disposable test data.
+                    if isinstance(execution, dict):
+                        execution = {
+                            key: value
+                            for key, value in execution.items()
+                            if key
+                            in {
+                                "artifactRef",
+                                "material",
+                                "artifactFilename",
+                                "extractedMetadata",
+                                "nozzleDiameter",
+                            }
+                        }
                     record.execution_data = execution
                     if record.execution_data != execution or scheduling:
                         raise ValueError(
@@ -531,7 +477,6 @@ def downgrade():
                                 **node,
                             },
                         )
-    op.drop_table("job_planning_facts")
     for name in JOB_COLUMNS:
         op.drop_column("jobs", name)
     for table in ("artifacts", "jobs"):

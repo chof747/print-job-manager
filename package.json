@@ -8,9 +8,11 @@
   },
   "scripts": {
     "update": "uv sync --project backend --group test && pnpm sync",
-    "check:backend": "uv run --project backend pytest backend/tests -q",
+    "check:backend": "PRINT_JOB_MANAGER_REQUIRE_TEST_DATABASE=1 uv run --project backend pytest backend/tests -q",
     "check:frontend": "vitest run frontend/",
     "migrate:backend": "cd backend && PYTHONPATH=.. uv run alembic -c alembic.ini upgrade head",
+    "db:clone": "uv run --project backend python scripts/pr_database.py create",
+    "db:dispose": "uv run --project backend python scripts/pr_database.py dispose",
     "dev:backend": "uv run --project backend uvicorn backend.app.main:app --reload",
     "dev:frontend": "vite --config frontend/vite.config.mts frontend",
     "sandcastle": "tsx --env-file=.sandcastle/.env .sandcastle/main.mts",

@@ -10,11 +10,20 @@ from alembic.config import Config
 
 
 @pytest.mark.parametrize(
-    ("field", "value"),
-    [("nozzleDiameter", 0.4), ("bedTemperature", 60), ("customProfile", "draft")],
+    ("field", "value", "preserved"),
+    [
+        ("nozzleDiameter", 0.4, True),
+        ("bedTemperature", 60, False),
+        ("customProfile", "draft", False),
+        ("customSettings", {"nested": [1, 2]}, False),
+    ],
 )
-def test_legacy_extra_planning_value_survives_migration(
-    repo_root: Path, monkeypatch: pytest.MonkeyPatch, field: str, value: object
+def test_legacy_planning_migration(
+    repo_root: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    field: str,
+    value: object,
+    preserved: bool,
 ) -> None:
     from backend.app.config import get_settings
 
@@ -58,6 +67,10 @@ def test_legacy_extra_planning_value_survives_migration(
                     "execution": json.dumps(execution),
                 },
             )
+        command.upgrade(config, "20261028_0009")
+        assert not sa.inspect(engine).has_table("job_planning_facts")
+        command.upgrade(config, "20261028_0010")
+        assert not sa.inspect(engine).has_table("legacy_artifact_identifiers")
         command.upgrade(config, "head")
         from sqlalchemy.orm import Session
 
@@ -66,7 +79,11 @@ def test_legacy_extra_planning_value_survives_migration(
         with Session(engine) as session:
             record = session.get(JobRecord, "legacy-job")
             assert record is not None
-            assert record.execution_data[field] == value
+            if preserved:
+                assert record.execution_data[field] == value
+            else:
+                assert field not in record.execution_data
+            assert not sa.inspect(engine).has_table("job_planning_facts")
     finally:
         engine.dispose()
         with admin_engine.begin() as connection:

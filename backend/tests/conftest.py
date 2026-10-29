@@ -20,6 +20,33 @@ if str(REPO_ROOT) not in sys.path:
 from backend.app.api.v1 import jobs
 
 
+def pytest_configure() -> None:
+    if os.environ.get("PRINT_JOB_MANAGER_REQUIRE_TEST_DATABASE") != "1":
+        return
+
+    from backend.app.config import get_settings
+
+    settings = get_settings()
+    app_url = sa.engine.make_url(settings.database_url)
+    if settings.test_database_url:
+        test_url = sa.engine.make_url(settings.test_database_url)
+    elif app_url.database:
+        test_url = app_url.set(database=f"{app_url.database}_test")
+    else:
+        raise pytest.UsageError("The application database URL must name a database")
+    if not test_url.drivername.startswith("postgresql") or not test_url.database:
+        raise pytest.UsageError("The test database URL must name a PostgreSQL database")
+    if (test_url.host, test_url.port or 5432, test_url.database) == (
+        app_url.host,
+        app_url.port or 5432,
+        app_url.database,
+    ):
+        raise pytest.UsageError("The test database must differ from the application database")
+    os.environ["PRINT_JOB_MANAGER_TEST_DATABASE_URL"] = test_url.render_as_string(
+        hide_password=False
+    )
+
+
 @pytest.fixture
 def repo_root() -> Path:
     return REPO_ROOT

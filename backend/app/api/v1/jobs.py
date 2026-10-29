@@ -525,6 +525,14 @@ class ImportService:
             filename = None
         else:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND)
+        unsupported = sorted(
+            set(missing_planning_values) - {"material", "nozzleDiameter"}
+        )
+        if unsupported:
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+                detail={"unsupportedPlanningValues": unsupported},
+            )
         if isinstance(extracted_metadata, dict):
             extracted_material = extracted_metadata.get("material")
             if isinstance(extracted_material, str):

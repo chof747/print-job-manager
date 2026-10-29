@@ -1042,7 +1042,7 @@ def test_creating_a_job_requires_every_parser_reported_planning_value_before_que
 ) -> None:
     class FakeParser:
         def parse(self, *, artifact_id: str, content: bytes) -> dict[str, object]:
-            return {"missingPlanningValues": ["estimatedDuration"], "diagnostics": []}
+            return {"missingPlanningValues": ["nozzleDiameter"], "diagnostics": []}
 
     monkeypatch.setattr(jobs, "import_service", jobs.ImportService(parser=FakeParser()))
     import_response = client.post(
@@ -1061,12 +1061,12 @@ def test_creating_a_job_requires_every_parser_reported_planning_value_before_que
 
     assert missing_value_response.status_code == 422
     assert missing_value_response.json() == {
-        "detail": {"missingPlanningValues": ["estimatedDuration"]}
+        "detail": {"missingPlanningValues": ["nozzleDiameter"]}
     }
     assert client.get("/api/v1/queue").json() == {"jobs": []}
 
     supplied_value_response = client.post(
-        f"/api/v1/import/{artifact_id}/jobs", json={"estimatedDuration": 60}
+        f"/api/v1/import/{artifact_id}/jobs", json={"nozzleDiameter": 0.4}
     )
 
     assert supplied_value_response.status_code == 201
@@ -1076,7 +1076,7 @@ def test_creating_a_job_requires_every_parser_reported_planning_value_before_que
     }
 
 
-def test_creating_a_job_persists_a_parser_required_non_material_planning_value_in_execution_data(
+def test_creating_a_job_rejects_unsupported_parser_planning_values(
     client: TestClient, monkeypatch
 ) -> None:
     class FakeParser:
@@ -1094,12 +1094,9 @@ def test_creating_a_job_persists_a_parser_required_non_material_planning_value_i
         f"/api/v1/import/{artifact_id}/jobs", json={"estimatedDuration": 60}
     )
 
-    assert create_response.status_code == 201
-    assert create_response.json()["executionData"] == {
-        "artifactRef": artifact_id,
-        "artifactFilename": "part.gcode",
-        "material": None,
-        "estimatedDuration": 60,
+    assert create_response.status_code == 422
+    assert create_response.json() == {
+        "detail": {"unsupportedPlanningValues": ["estimatedDuration"]}
     }
 
 
