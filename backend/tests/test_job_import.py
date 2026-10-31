@@ -74,7 +74,10 @@ def test_importing_gcode_returns_its_canonical_artifact_and_missing_material_wit
     )
 
     assert response.status_code == 201
+    import_id = response.json()["import"]["id"]
+    assert isinstance(import_id, str) and import_id
     assert response.json() == {
+        "import": {"id": import_id},
         "artifact": {
             "id": hashlib.sha256(content).hexdigest(),
             "filename": "calibration-cube.gcode",

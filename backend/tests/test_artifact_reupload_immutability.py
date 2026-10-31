@@ -35,14 +35,11 @@ def test_reupload_does_not_replace_original_artifact_import_facts(
         "material": "PLA",
         "extractedMetadata": {"material": "PLA"},
     }
-    assert (
-        second.json()["artifact"]["filename"]
-        == created.json()["executionData"]["artifactFilename"]
-    )
-    assert (
-        second.json()["extractedMetadata"]
-        == created.json()["executionData"]["extractedMetadata"]
-    )
+    assert second.json()["artifact"]["filename"] == "renamed.gcode"
+    assert second.json()["extractedMetadata"] == {"material": "PETG"}
+    first_review = client.get(f"/api/v1/import/{first.json()['import']['id']}")
+    assert first_review.status_code == 200
+    assert first_review.json()["extractedMetadata"] == {"material": "PLA"}
     assert (
         second.json()["missingPlanningValues"] == first.json()["missingPlanningValues"]
     )

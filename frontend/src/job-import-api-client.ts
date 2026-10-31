@@ -5,6 +5,7 @@ export type ImportedArtifact = {
 
 export type ImportGcodeResult = {
   artifact: ImportedArtifact;
+  import?: { id: string };
   extractedMetadata?: Record<string, string | number>;
   provenance?: Record<string, { parser: string; sourceKey: string }>;
   diagnostics?: Array<{ code: string; sourceKey: string }>;
@@ -52,6 +53,14 @@ export async function importGcode(apiBaseUrl: string, file: File): Promise<Impor
     throw new Error("Unable to import G-code");
   }
 
+  return response.json() as Promise<ImportGcodeResult>;
+}
+
+export async function fetchImportReview(apiBaseUrl: string, importId: string): Promise<ImportGcodeResult> {
+  const response = await fetch(`${apiBaseUrl}/import/${encodeURIComponent(importId)}`);
+  if (!response.ok) {
+    throw new Error("Unable to load import review");
+  }
   return response.json() as Promise<ImportGcodeResult>;
 }
 

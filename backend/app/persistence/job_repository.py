@@ -3,7 +3,13 @@ from copy import deepcopy
 from sqlalchemy import select
 
 from .database import SessionFactory
-from .models import ArtifactRecord, JobHistoryRecord, JobRecord
+from .extraction_projection import extraction_facts
+from .models import (
+    ArtifactExtraction,
+    ArtifactRecord,
+    JobHistoryRecord,
+    JobRecord,
+)
 
 
 class SqlAlchemyJobRepository:
@@ -23,10 +29,27 @@ class SqlAlchemyJobRepository:
             artifact = session.get(ArtifactRecord, artifact_ref)
             if artifact is None:
                 raise RuntimeError("job artifact does not exist")
+            extraction_id = job.get("_extraction_id")
+            if extraction_id is not None:
+                if not isinstance(extraction_id, str):
+                    raise TypeError("extraction id must be a string")
+                extraction = session.get(ArtifactExtraction, extraction_id)
+                if extraction is not None and extraction.artifact_id != artifact_ref:
+                    raise RuntimeError("artifact extraction does not belong to job artifact")
+            else:
+                extraction = session.scalar(
+                    select(ArtifactExtraction).where(
+                        ArtifactExtraction.artifact_id == artifact_ref
+                    )
+                )
+            if extraction is None:
+                raise RuntimeError("artifact extraction does not exist")
+            parsed = extraction_facts(session, artifact, extraction)
             record = JobRecord(
                 id=job["id"],
                 artifact_ref=artifact_ref,
-                parsed_metadata_snapshot=deepcopy(artifact.parsed_metadata_snapshot),
+                extraction_id=extraction.id,
+                parsed_metadata_snapshot=parsed,
                 state=job["state"],
                 execution_data=deepcopy(execution_data),
                 scheduling_data=deepcopy(job["schedulingData"]),
