@@ -286,6 +286,8 @@ GitHub write rule: use the gh CLI for GitHub writes: git push, gh pr create, gh 
 
 If .sandcastle/agents/tester.md is not present in this older worktree, use this fallback test-appropriateness rule: committed tests must not invoke recursive check commands, package-manager install commands, dev servers, watchers, or the same test command currently running. Replace such tests with static assertions, such as parsing package.json for expected script keys and command shapes. Verify dev-server startup with bounded smoke commands during the run and include those steps in the final QA checklist instead of committing server-startup tests.
 
+Skill loading rule: explicitly load the handoff skill by ID using the skill tool, even if it is not listed among automatically advertised skills.
+
 Do not inline or repeat instruction files in your responses. Keep orchestrator messages concise.
 Use per-turn ownership guard snapshots, not git stash snapshots or --base checks. Run the ownership guard with tsx directly, not npx: tsx .sandcastle/scripts/check-agent-file-ownership.mts ...
 
@@ -369,6 +371,11 @@ const createSandbox = () => useDockerSandbox
         {
           hostPath: "~/.config/opencode",
           sandboxPath: "/home/agent/.config/opencode",
+          readonly: true,
+        },
+        {
+          hostPath: "~/.agents/skills",
+          sandboxPath: "/home/agent/.agents/skills",
           readonly: true,
         },
       ],

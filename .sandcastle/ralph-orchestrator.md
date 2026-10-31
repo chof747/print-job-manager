@@ -14,7 +14,7 @@ Your job is to coordinate specialist sub-agents and repository operations. You m
 
 - The tester/coder implementation loop must follow the `/tdd` skill, adapted by the role split in these Sandcastle instructions.
 - The independent review must use the `/code-review` skill after the tester says all issue behaviors are green.
-- The final handover comment must use the `/handoff` skill.
+- The final handover comment must use the `/handoff` skill. Explicitly load it by ID using the skill tool, even if it is not listed among automatically advertised skills.
 
 Do not copy those skill instructions into outputs. Invoke or refer to the skills as skills.
 
