@@ -1,6 +1,7 @@
 import fcntl
 import hashlib
 import logging
+import math
 import os
 import re
 import tempfile
@@ -13,13 +14,10 @@ from uuid import uuid4
 
 from fastapi import APIRouter, File, HTTPException, Response, UploadFile, status
 from pydantic import BaseModel, ConfigDict
-from sqlalchemy import select
-from sqlalchemy.dialects.postgresql import insert
 
 from ...config import get_settings
-from ...persistence.database import SessionFactory
+from ...persistence.import_repository import SqlAlchemyImportRepository
 from ...persistence.job_repository import SqlAlchemyJobRepository
-from ...persistence.models import ArtifactRecord
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
@@ -131,6 +129,9 @@ artifact_storage = FileSystemStorage(get_settings().artifact_storage_path)
 
 
 class GcodeParser:
+    parser_id = "gcode-metadata"
+    parser_version = "1"
+
     def parse(self, *, artifact_id: str, content: bytes) -> dict[str, object]:
         del artifact_id
         extracted_metadata: dict[str, object] = {}
@@ -310,51 +311,6 @@ class InMemoryImportRepository:
         return deepcopy(record) if record is not None else None
 
 
-class SqlAlchemyImportRepository:
-    @property
-    def imported_artifact_ids(self) -> set[str]:
-        with SessionFactory() as session:
-            return set(session.scalars(select(ArtifactRecord.id)))
-
-    def save_import(
-        self,
-        *,
-        artifact_id: str,
-        filename: str,
-        media_type: str,
-        parsed: dict[str, object],
-    ) -> None:
-        del media_type
-        with SessionFactory.begin() as session:
-            artifact = ArtifactRecord(
-                id=artifact_id,
-                sha256=artifact_id.removeprefix("sha256:"),
-                storage_key=artifact_id,
-                filename=filename,
-                parsed_metadata_snapshot=deepcopy(parsed),
-            )
-            values = {
-                column.key: getattr(artifact, column.key)
-                for column in ArtifactRecord.__table__.columns
-                if getattr(artifact, column.key) is not None
-            }
-            session.execute(
-                insert(ArtifactRecord)
-                .values(**values)
-                .on_conflict_do_nothing(index_elements=["id"])
-            )
-
-    def load_import(self, artifact_id: str) -> dict[str, object] | None:
-        with SessionFactory() as session:
-            artifact = session.get(ArtifactRecord, artifact_id)
-            if artifact is None:
-                return None
-            return {
-                "filename": artifact.filename,
-                "parsed": deepcopy(artifact.parsed_metadata_snapshot),
-            }
-
-
 class InMemoryJobRepository:
     def __init__(self) -> None:
         self.active_jobs: list[dict[str, object]] = []
@@ -401,6 +357,9 @@ class ImportService:
             if storage is not None or parser is not None
             else SqlAlchemyImportRepository()
         )
+        if isinstance(self.repository, SqlAlchemyImportRepository):
+            self.repository.parser_id = getattr(self.parser, "parser_id", type(self.parser).__name__)
+            self.repository.parser_version = getattr(self.parser, "parser_version", "unknown")
         # Unit callers can supply an isolated import boundary without requiring a DB.
         self.job_repository = job_repository or (
             InMemoryJobRepository()
@@ -428,8 +387,20 @@ class ImportService:
             )
             try:
                 parsed = self.parser.parse(artifact_id=artifact_id, content=content)
+                supported_fields = {
+                    "material", "estimatedDuration", "filamentWeightGrams",
+                    "nozzleDiameter", "layerHeight", "dimensions", "slicer",
+                    "printerProfile",
+                }
+                for key in ("extractedMetadata", "provenance"):
+                    values = parsed.get(key)
+                    if isinstance(values, dict):
+                        parsed[key] = {
+                            field: value for field, value in values.items()
+                            if field in supported_fields
+                        }
                 missing_planning_values = _missing_planning_values(parsed)
-                self.repository.save_import(
+                import_id = self.repository.save_import(
                     artifact_id=artifact_id,
                     filename=filename,
                     media_type=media_type,
@@ -458,8 +429,9 @@ class ImportService:
                             if existing is None:
                                 storage.delete(artifact_id)
                 raise
+        original_filename, original_media_type = filename, media_type
         record_loader = getattr(self.repository, "load_import", None)
-        record = record_loader(artifact_id) if callable(record_loader) else None
+        record = record_loader(import_id or artifact_id) if callable(record_loader) else None
         if record is not None:
             persisted = record.get("parsed")
             if not isinstance(persisted, dict):
@@ -485,6 +457,10 @@ class ImportService:
             "missingPlanningValues": missing_planning_values,
             "diagnostics": parsed["diagnostics"],
         }
+        if import_id is not None:
+            imported["import"] = {"id": import_id}
+            imported["artifact"]["filename"] = original_filename
+            imported["artifact"]["mediaType"] = original_media_type
         for key in ("extractedMetadata", "provenance"):
             if key in parsed:
                 imported[key] = deepcopy(parsed[key])
@@ -503,6 +479,35 @@ class ImportService:
             planning_values=planning_values,
         )[0]
 
+    def get_import(self, artifact_id: str) -> dict[str, object] | None:
+        context_loader = getattr(self.repository, "load_context", None)
+        context = context_loader(artifact_id) if callable(context_loader) else None
+        record = self.repository.load_import(artifact_id)
+        if record is None:
+            return None
+        if context is not None:
+            artifact_id = context["artifact_id"]
+        parsed = record["parsed"]
+        if not isinstance(parsed, dict):
+            raise TypeError("persisted import facts must be an object")
+        review: dict[str, object] = {
+            "artifact": {
+                "id": artifact_id,
+                "filename": record["filename"],
+                "mediaType": record["mediaType"],
+            },
+            "missingPlanningValues": _missing_planning_values(parsed),
+            "diagnostics": parsed["diagnostics"],
+        }
+        if context is not None:
+            review["import"] = {"id": context["id"]}
+            review["artifact"]["filename"] = context["filename"]
+            review["artifact"]["mediaType"] = context["mediaType"]
+        for key in ("extractedMetadata", "provenance"):
+            if key in parsed:
+                review[key] = deepcopy(parsed[key])
+        return review
+
     def create_job_with_status(
         self,
         *,
@@ -513,6 +518,7 @@ class ImportService:
         record_loader = getattr(self.repository, "load_import", None)
         record = record_loader(artifact_id) if callable(record_loader) else None
         if record is not None:
+            artifact_id = record.get("artifact_id", artifact_id)
             parsed = record["parsed"]
             if not isinstance(parsed, dict):
                 raise TypeError("persisted import parsed snapshot must be an object")
@@ -551,6 +557,23 @@ class ImportService:
                 status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
                 detail={"missingPlanningValues": missing_values},
             )
+        if "nozzleDiameter" in missing_planning_values:
+            nozzle = planning_values["nozzleDiameter"]
+            try:
+                if isinstance(nozzle, bool):
+                    raise TypeError
+                nozzle_value = float(nozzle)
+            except (TypeError, ValueError, OverflowError):
+                raise HTTPException(
+                    status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+                    detail="nozzleDiameter must be a positive finite number",
+                ) from None
+            if not math.isfinite(nozzle_value) or nozzle_value <= 0:
+                raise HTTPException(
+                    status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+                    detail="nozzleDiameter must be a positive finite number",
+                )
+            planning_values["nozzleDiameter"] = nozzle_value
 
         execution_data: dict[str, object] = {
             "artifactRef": artifact_id,
@@ -564,6 +587,10 @@ class ImportService:
                 for value in missing_planning_values
             }
         )
+        if isinstance(extracted_metadata, dict):
+            extracted_nozzle = extracted_metadata.get("nozzleDiameter")
+            if extracted_nozzle is not None:
+                execution_data["nozzleDiameter"] = extracted_nozzle
         if extracted_metadata is not None:
             execution_data["extractedMetadata"] = deepcopy(extracted_metadata)
 
@@ -573,6 +600,11 @@ class ImportService:
             "executionData": execution_data,
             "schedulingData": {"priority": 0},
         }
+        if isinstance(self.job_repository, SqlAlchemyJobRepository) and record is not None:
+            job["_parsed_metadata"] = parsed
+            extraction = record.get("extraction")
+            if isinstance(extraction, dict):
+                job["_extraction_id"] = extraction.get("id")
         return self.job_repository.create_ready_job(
             job=job,
             creation_history={"jobId": job["id"], "state": "ready"},
@@ -626,6 +658,14 @@ async def create_job_from_import(
     if not created:
         response.status_code = status.HTTP_200_OK
     return job
+
+
+@router.get("/import/{artifact_id}")
+def import_review(artifact_id: str) -> dict[str, object]:
+    review = get_import_service().get_import(artifact_id)
+    if review is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND)
+    return review
 
 
 @router.get("/queue")
