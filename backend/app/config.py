@@ -18,6 +18,8 @@ class Settings(BaseSettings):
     database_url: str = (
         "postgresql+psycopg://postgres:postgres@localhost:5432/print_job_manager"
     )
+    test_database_url: str | None = None
+    admin_database_url: str | None = None
     artifact_storage_path: Path = Path("data/artifacts")
 
 

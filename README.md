@@ -17,6 +17,40 @@ Run the backend test suite from the repo root:
 pnpm run check:backend
 ```
 
+The full suite requires a running PostgreSQL server and a **disposable**, separate
+test database. By default, its URL comes from `PRINT_JOB_MANAGER_DATABASE_URL`,
+with `_test` appended to the database name. Create that database first, or set
+`PRINT_JOB_MANAGER_TEST_DATABASE_URL` in `backend/.env` (see `backend/.env.example`)
+or in the environment to choose a different disposable database.
+The database user must be able to create and drop schemas. The command runs the
+PostgreSQL tests rather than silently skipping them; it does not create the database.
+Tests migrate and downgrade their schemas, so never use a database with valuable data.
+
+### Disposable database for manual PR testing
+
+With `PRINT_JOB_MANAGER_DATABASE_URL` in `backend/.env` pointing to the original
+database, stop the backend and disconnect other clients from it, then run:
+
+```sh
+pnpm run db:clone 61
+```
+
+Replace `61` with the PR number. This creates `<original>_pr_61` from the original database, including its data,
+schemas and object permissions, and copies database ownership and grants. PostgreSQL
+roles are cluster-wide and are reused. The connecting role needs permission to
+clone the source, assign the owner, and reproduce its grants. Existing clones are
+never overwritten. If grant copying fails, the incomplete clone is left for inspection.
+If the application role lacks these privileges, set `PRINT_JOB_MANAGER_ADMIN_DATABASE_URL`
+in `backend/.env` to a privileged connection on the same server; the application URL
+still determines which database to clone. The admin connection is also used to dispose
+of the clone.
+
+Copy the artifact-storage directory separately, then configure the PR backend to
+use the clone and copied storage before running migrations. When finished, stop
+clients connected to the clone, restore the **original** database URL in
+`backend/.env`, and run `pnpm run db:dispose 61` with the same PR number. Type the clone name when prompted;
+this permanently deletes the clone, not its separately copied artifact files.
+
 Start the FastAPI backend dev server from the repo root:
 
 ```sh
@@ -31,6 +65,8 @@ GitHub writes use the `gh` CLI inside the sandbox. Make sure `.sandcastle/.env` 
 
 Normal Sandcastle logs are human-readable. Set `SANDCASTLE_LOG_VERBOSE=true` only when debugging provider stream issues; it prints raw OpenCode JSON events and is intentionally noisy.
 
+Docker runs mount the host's `~/.agents/skills` directory read-only so OpenCode can discover the skills required by the Ralph loop. Ensure `tdd`, `code-review`, and `handoff` are installed there before starting a run. The `handoff` skill may be hidden from the automatic skill list; the orchestrator loads it explicitly by ID.
+
 The sandbox resolves project-declared backend dependencies through `uv` before the agent starts, so agents can verify backend code without bootstrapping tooling themselves. Set `SANDCASTLE_INSTALL_PROJECT_DEPS=false` to skip this setup.
 
 The sandbox also installs Node dependencies with pnpm before the agent starts, so frontend tools like Vitest are available on `PATH`. Set `SANDCASTLE_INSTALL_NODE_DEPS=false` to skip this setup.
@@ -42,6 +78,10 @@ Build the local Sandcastle Docker image after changing `.sandcastle/Dockerfile`:
 ```sh
 pnpm run sandcastle:docker:build
 ```
+
+The Dockerfile pins the OpenCode CLI version (`@opencode/cli`). When upgrading OpenCode to a new major version or another breaking release, update that pin to the compatible version before rebuilding the image. Do not use the legacy `opencode-ai` package: it installs OpenCode 1.x and is incompatible with the V2 OAuth credentials used by Sandcastle.
+
+Docker runs export the host's OpenAI account with `opencode auth export openai` and import it into the sandbox using OpenCode V2's credential commands. Connect OpenAI on the host first (`opencode auth login openai`). The temporary export contains secrets and is removed when the run exits normally; if the process is forcibly terminated, remove any leftover `sandcastle-auth-*` directory from the system temporary directory securely.
 
 ### Start A New Build
 

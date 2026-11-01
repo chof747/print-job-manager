@@ -2,11 +2,12 @@ from copy import deepcopy
 from datetime import date
 
 from sqlalchemy import select
-from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.orm import selectinload
 
 from .database import SessionFactory
+from .extraction_projection import extraction_facts
 from .models import (
+    ArtifactExtraction,
     ArtifactRecord,
     JobHistoryRecord,
     JobRecord,
@@ -37,47 +38,43 @@ class SqlAlchemyJobRepository:
             artifact = session.get(ArtifactRecord, artifact_ref)
             if artifact is None:
                 raise RuntimeError("job artifact does not exist")
-            statement = (
-                insert(JobRecord)
-                .values(
-                    id=job["id"],
-                    artifact_ref=artifact_ref,
-                    parsed_metadata_snapshot=deepcopy(
-                        artifact.parsed_metadata_snapshot
-                    ),
-                    state=job["state"],
-                    execution_data=deepcopy(execution_data),
-                    # This legacy column is retained for the original migration.
-                    # Scheduling projections are authored from relational records.
-                    scheduling_data=deepcopy(job["schedulingData"]),
-                )
-                .on_conflict_do_nothing(index_elements=[JobRecord.artifact_ref])
-                .returning(JobRecord.id)
-            )
-            created = session.scalar(statement) is not None
-            record = session.scalar(
-                select(JobRecord).where(JobRecord.artifact_ref == artifact_ref)
-            )
-            if record is None:
-                raise RuntimeError("job insert did not return a record")
-            if created:
-                scheduling_data = job["schedulingData"]
-                if not isinstance(scheduling_data, dict):
-                    raise TypeError("schedulingData must be an object")
-                priority = scheduling_data.get("priority", 0)
-                if not isinstance(priority, int):
-                    raise TypeError("schedulingData.priority must be an integer")
-                session.add(JobSchedulingRecord(job_id=record.id, priority=priority))
-                job_id = creation_history["jobId"]
-                state = creation_history["state"]
-                if not isinstance(job_id, str) or not isinstance(state, str):
-                    raise TypeError(
-                        "creation history must contain string jobId and state"
+            extraction_id = job.get("_extraction_id")
+            if extraction_id is not None:
+                if not isinstance(extraction_id, str):
+                    raise TypeError("extraction id must be a string")
+                extraction = session.get(ArtifactExtraction, extraction_id)
+                if extraction is not None and extraction.artifact_id != artifact_ref:
+                    raise RuntimeError("artifact extraction does not belong to job artifact")
+            else:
+                extraction = session.scalar(
+                    select(ArtifactExtraction).where(
+                        ArtifactExtraction.artifact_id == artifact_ref
+
                     )
-                session.add(
-                    JobHistoryRecord(id=f"{job_id}-{state}", job_id=job_id, state=state)
                 )
-            return self._as_job(record), created
+            if extraction is None:
+                raise RuntimeError("artifact extraction does not exist")
+            parsed = extraction_facts(session, artifact, extraction)
+            record = JobRecord(
+                id=job["id"],
+                artifact_ref=artifact_ref,
+                extraction_id=extraction.id,
+                parsed_metadata_snapshot=parsed,
+                state=job["state"],
+                execution_data=deepcopy(execution_data),
+                scheduling_data=deepcopy(job["schedulingData"]),
+            )
+            record.scheduling = JobSchedulingRecord(priority=record.priority)
+            session.add(record)
+            session.flush()
+            job_id = creation_history["jobId"]
+            state = creation_history["state"]
+            if not isinstance(job_id, str) or not isinstance(state, str):
+                raise TypeError("creation history must contain string jobId and state")
+            session.add(
+                JobHistoryRecord(id=f"{job_id}-{state}", job_id=job_id, state=state)
+            )
+            return self._as_job(record), True
 
     def active_queue(self) -> dict[str, list[object]]:
         with SessionFactory() as session:
@@ -137,6 +134,7 @@ class SqlAlchemyJobRepository:
                 if not isinstance(priority, int):
                     raise TypeError("schedulingData.priority must be an integer")
                 scheduling.priority = priority
+                record.priority = priority
             if "dueDate" in scheduling_data:
                 due_date = scheduling_data["dueDate"]
                 if due_date is not None and not isinstance(due_date, date):

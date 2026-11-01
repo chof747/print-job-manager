@@ -74,6 +74,14 @@ type SchedulingFormValues = {
   printerId: string;
 };
 
+function formatExtractedValue(key: string, value: unknown) {
+  if (key === "estimatedDuration" && typeof value === "number") return formatEstimatedDuration(value);
+  if (key === "dimensions" && value && typeof value === "object" && "x" in value && "y" in value && "z" in value) {
+    return `${value.x} × ${value.y} × ${value.z} mm`;
+  }
+  return String(value);
+}
+
 
 export function App() {
   const runtimeConfig = useContext(RuntimeConfigContext);
@@ -261,7 +269,7 @@ export function App() {
                  <input
                     className="rounded-xl border border-slate-300 bg-slate-100 px-3 py-2 text-slate-900 shadow-sm"
                     readOnly
-                    value={key === "estimatedDuration" && typeof value === "number" ? formatEstimatedDuration(value) : String(value)}
+                    value={formatExtractedValue(key, value)}
                   />
                </FormField>
                 {provenance[key] && <p className="text-sm text-slate-500">Source: {provenance[key].parser}, {provenance[key].sourceKey}</p>}

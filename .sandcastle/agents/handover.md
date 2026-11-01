@@ -1,6 +1,6 @@
 # Handover Instructions
 
-Generate the final PR handover using the `/handoff` skill.
+Generate the final PR handover using the `/handoff` skill. Explicitly load it by ID using the skill tool, even if it is not listed among automatically advertised skills.
 
 The handover is posted as a PR comment after the PR exists. Do not commit it as a repo file by default.
 
