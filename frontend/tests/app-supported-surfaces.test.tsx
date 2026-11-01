@@ -1,4 +1,4 @@
-import { cleanup, render, screen } from "@testing-library/react";
+import { cleanup, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, expect, it, vi } from "vitest";
 
 import { App } from "../src/app";
@@ -43,5 +43,5 @@ it("limits the operations shell to API-backed import and queue surfaces", async 
   expect(await screen.findByRole("region", { name: /guided import/i })).toBeVisible();
   expect(screen.getByRole("region", { name: /active queue/i })).toBeVisible();
   expect(screen.queryByRole("heading", { name: /printer|scheduler|material stock|job details/i })).not.toBeInTheDocument();
-  expect(fetchMock).toHaveBeenCalledWith(`${apiBaseUrl}/queue`);
+  await waitFor(() => expect(fetchMock).toHaveBeenCalledWith(`${apiBaseUrl}/queue`));
 });

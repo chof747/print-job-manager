@@ -71,7 +71,10 @@ export function useJobImport(apiBaseUrl: string | null) {
       const requestVersion = ++queueRequestVersion.current;
       const queue = await fetchQueue(apiBaseUrl);
       if (requestVersion === queueRequestVersion.current) {
-        setJobs(queue.jobs);
+        setJobs((currentJobs) => queue.jobs.map((queuedJob) => {
+          const currentJob = currentJobs.find((item) => item.id === queuedJob.id);
+          return currentJob && currentJob.version > queuedJob.version ? currentJob : queuedJob;
+        }));
       }
       setIsCreated(true);
     } catch (error: unknown) {
@@ -98,16 +101,17 @@ export function useJobImport(apiBaseUrl: string | null) {
     }
   }
 
-  async function updateScheduling(job: Job, priority: number) {
+  async function updateScheduling(job: Job, changes: { priority?: number; dueDate?: string | null; notes?: string | null; tags?: string[]; printerAssignment?: { mode: "preferred" | "required"; printerId: string } | null }) {
     if (!apiBaseUrl) {
       return;
     }
 
     const updatedJob = await updateJobScheduling(apiBaseUrl, job.id, {
-      priority,
+      ...changes,
       expectedVersion: job.version,
     });
     setJobs((currentJobs) => currentJobs.map((currentJob) => currentJob.id === updatedJob.id ? updatedJob : currentJob));
+    return updatedJob;
   }
 
   return { artifact, extractedMetadata, provenance, diagnostics, missingPlanningValues, jobs, createError, isCreated, isImporting, importFile, create, updateScheduling };

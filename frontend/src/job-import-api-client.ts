@@ -1,3 +1,6 @@
+import { ApiError } from "./generated/scheduling/core/ApiError";
+import { SchedulingClient } from "./generated/scheduling/SchedulingClient";
+
 export type ImportedArtifact = {
   id: string;
   filename: string;
@@ -21,6 +24,10 @@ export type Job = {
   };
   schedulingData: {
     priority: number;
+    dueDate?: string | null;
+    notes?: string | null;
+    tags?: string[];
+    printerAssignment?: { mode: "preferred" | "required"; printerId: string } | null;
   };
 };
 
@@ -43,10 +50,6 @@ export type CreateJobRequest = {
   planningValues: PlanningValues;
 };
 
-/**
- * Typed API operations shaped for replacement by an OpenAPI generator.
- * The implementation remains local until generation is introduced.
- */
 export async function importGcode(apiBaseUrl: string, file: File): Promise<ImportGcodeResult> {
   const formData = new FormData();
   formData.append("file", file);
@@ -92,17 +95,18 @@ export async function fetchQueue(apiBaseUrl: string): Promise<Queue> {
 export async function updateJobScheduling(
   apiBaseUrl: string,
   jobId: string,
-  schedulingData: { priority: number; expectedVersion: number },
+  schedulingData: { priority?: number; dueDate?: string | null; notes?: string | null; tags?: string[]; printerAssignment?: { mode: "preferred" | "required"; printerId: string } | null; expectedVersion: number },
 ): Promise<Job> {
-  const response = await fetch(`${apiBaseUrl}/jobs/${jobId}/scheduling`, {
-    method: "PATCH",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(schedulingData),
-  });
-
-  if (!response.ok) {
-    throw new Error("Unable to update job scheduling");
+  try {
+    const client = new SchedulingClient({ BASE: apiBaseUrl, ENCODE_PATH: encodeURIComponent });
+    return await client.default.updateJobSchedulingApiV1JobsJobIdSchedulingPatch({
+      jobId,
+      requestBody: schedulingData,
+    }) as unknown as Job;
+  } catch (error: unknown) {
+    if (!(error instanceof ApiError)) throw error;
+    throw new Error(error.status === 409
+      ? "Scheduling has changed. Refresh the job before saving again."
+      : "Unable to update job scheduling");
   }
-
-  return response.json() as Promise<Job>;
 }

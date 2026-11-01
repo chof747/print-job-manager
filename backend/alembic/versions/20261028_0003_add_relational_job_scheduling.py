@@ -62,5 +62,29 @@ def upgrade() -> None:
 
 
 def downgrade() -> None:
+    op.execute(
+        """
+        UPDATE jobs
+        SET scheduling_data = scheduling_data || jsonb_build_object(
+            'priority', scheduling.priority,
+            'dueDate', scheduling.due_date,
+            'notes', scheduling.notes,
+            'tags', COALESCE(
+                (SELECT jsonb_agg(tag ORDER BY position)
+                 FROM job_scheduling_tags WHERE job_id = scheduling.job_id),
+                '[]'::jsonb
+            ),
+            'printerAssignment', CASE
+                WHEN scheduling.printer_assignment_mode IS NULL THEN NULL
+                ELSE jsonb_build_object(
+                    'mode', scheduling.printer_assignment_mode,
+                    'printerId', scheduling.preferred_printer_id
+                )
+            END
+        )
+        FROM job_scheduling AS scheduling
+        WHERE jobs.id = scheduling.job_id
+        """
+    )
     op.drop_table("job_scheduling_tags")
     op.drop_table("job_scheduling")

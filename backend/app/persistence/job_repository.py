@@ -163,8 +163,8 @@ class SqlAlchemyJobRepository:
                 elif isinstance(assignment, dict):
                     mode = assignment.get("mode")
                     printer_id = assignment.get("printerId")
-                    if mode != "preferred" or not isinstance(printer_id, str):
-                        raise TypeError("printer assignment must be a preferred printer")
+                    if mode not in ("preferred", "required") or not isinstance(printer_id, str):
+                        raise TypeError("printer assignment must be a preferred or required printer")
                     scheduling.printer_assignment_mode = mode
                     scheduling.preferred_printer_id = printer_id
                 else:

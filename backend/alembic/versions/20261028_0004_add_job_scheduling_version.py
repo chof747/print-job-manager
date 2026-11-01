@@ -19,8 +19,26 @@ def upgrade() -> None:
         "job_scheduling",
         sa.Column("version", sa.Integer(), nullable=False, server_default="0"),
     )
+    op.execute(
+        """
+        UPDATE job_scheduling AS scheduling
+        SET version = COALESCE((jobs.scheduling_data ->> '_schedulingVersion')::integer, 0)
+        FROM jobs WHERE jobs.id = scheduling.job_id
+        """
+    )
+    op.execute("UPDATE jobs SET scheduling_data = scheduling_data - '_schedulingVersion'")
     op.alter_column("job_scheduling", "version", server_default=None)
 
 
 def downgrade() -> None:
+    op.execute(
+        """
+        UPDATE jobs
+        SET scheduling_data = scheduling_data || jsonb_build_object(
+            '_schedulingVersion', scheduling.version
+        )
+        FROM job_scheduling AS scheduling
+        WHERE jobs.id = scheduling.job_id
+        """
+    )
     op.drop_column("job_scheduling", "version")

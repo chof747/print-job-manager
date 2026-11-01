@@ -10,6 +10,7 @@
     "update": "uv sync --project backend --group test && pnpm sync",
     "check:backend": "uv run --project backend pytest backend/tests -q",
     "check:frontend": "vitest run frontend/",
+    "generate:scheduling-client": "uv run --project backend python -m scripts.generate_scheduling_client",
     "migrate:backend": "cd backend && PYTHONPATH=.. uv run alembic -c alembic.ini upgrade head",
     "dev:backend": "uv run --project backend uvicorn backend.app.main:app --reload",
     "dev:frontend": "vite --config frontend/vite.config.mts frontend",
@@ -45,6 +46,7 @@
     "@types/react": "^19.2.18",
     "@types/react-dom": "^19.2.4",
     "jsdom": "^30.0.1",
+    "openapi-typescript-codegen": "^0.31.0",
     "react": "^19.2.8",
     "react-dom": "^19.2.8",
     "tailwindcss": "^4.3.3",
@@ -52,5 +54,8 @@
     "typescript": "^7.0.2",
     "vite": "^8.2.1",
     "vitest": "^4.1.10"
+  },
+  "dependencies": {
+    "react-hook-form": "^7.91.0"
   }
 }

@@ -6,10 +6,11 @@ from copy import deepcopy
 from datetime import date
 from pathlib import Path
 from threading import Lock
-from typing import Literal, Protocol
+from typing import Annotated, Literal, Protocol
 
 from fastapi import APIRouter, File, HTTPException, Response, UploadFile, status
-from pydantic import BaseModel, ConfigDict, Field, model_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
+from pydantic.json_schema import SkipJsonSchema
 from sqlalchemy import select
 
 from ...config import get_settings
@@ -30,13 +31,21 @@ class CreateJobRequest(BaseModel):
 
 
 class PreferredPrinterAssignment(BaseModel):
-    mode: Literal["preferred"]
-    printer_id: str = Field(alias="printerId")
+    mode: Literal["preferred", "required"]
+    printer_id: str = Field(alias="printerId", max_length=255)
+
+    @field_validator("printer_id")
+    @classmethod
+    def reject_blank_printer_id(cls, value: str) -> str:
+        if not value.strip():
+            raise ValueError("printer ID cannot be blank")
+        return value
 
 
-class UpdateSchedulingRequest(BaseModel):
-    expected_version: int = Field(alias="expectedVersion")
-    priority: int | None = None
+class SchedulingDataResponse(BaseModel):
+    model_config = ConfigDict(extra="allow")
+
+    priority: int
     due_date: date | None = Field(default=None, alias="dueDate")
     notes: str | None = None
     tags: list[str] | None = None
@@ -44,13 +53,80 @@ class UpdateSchedulingRequest(BaseModel):
         default=None, alias="printerAssignment"
     )
 
+
+class SchedulingJobResponse(BaseModel):
+    model_config = ConfigDict(extra="allow")
+
+    id: str
+    state: str
+    version: int
+    execution_data: dict[str, object] = Field(alias="executionData")
+    scheduling_data: SchedulingDataResponse = Field(alias="schedulingData")
+
+
+class QueueResponse(BaseModel):
+    jobs: list[SchedulingJobResponse]
+
+
+class UpdateSchedulingRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    expected_version: int = Field(alias="expectedVersion")
+    priority: int | SkipJsonSchema[None] = Field(default=None, ge=-(2**31), le=2**31 - 1)
+    due_date: date | None = Field(default=None, alias="dueDate")
+    notes: str | None = None
+    tags: list[Annotated[str, Field(max_length=255)]] | SkipJsonSchema[None] = None
+    printer_assignment: PreferredPrinterAssignment | None = Field(
+        default=None, alias="printerAssignment"
+    )
+
+    @field_validator("priority", "tags", mode="before")
+    @classmethod
+    def reject_null_scheduling_fields(cls, value: object) -> object:
+        if value is None:
+            raise ValueError("field cannot be null")
+        return value
+
+    @field_validator("priority", mode="before")
+    @classmethod
+    def reject_boolean_priority(cls, value: object) -> object:
+        if isinstance(value, bool):
+            raise ValueError("priority cannot be a boolean")
+        return value
+
+    @field_validator("tags")
+    @classmethod
+    def reject_duplicate_tags(cls, value: list[str] | None) -> list[str] | None:
+        if value is not None and len(value) != len(set(value)):
+            raise ValueError("tags must be unique")
+        return value
+
     @model_validator(mode="before")
     @classmethod
     def reject_execution_data_changes(cls, value: object) -> object:
-        if isinstance(value, dict) and "executionData" in value:
+        if isinstance(value, dict) and any(
+            key in value
+            for key in (
+                "executionData",
+                "artifactRef",
+                "artifactFilename",
+                "material",
+                "checksum",
+                "extractedMetadata",
+                "parsedMetadataSnapshot",
+            )
+        ):
             raise ValueError(
                 "executionData is immutable after queueing; create a replacement job instead"
             )
+        if isinstance(value, dict):
+            allowed = {field.alias or name for name, field in cls.model_fields.items()}
+            unknown = value.keys() - allowed
+            if unknown:
+                raise ValueError(
+                    f"Unknown scheduling fields: {', '.join(sorted(unknown))}. "
+                    "Execution data is immutable after queueing; create a replacement job instead"
+                )
         return value
 
 
@@ -645,7 +721,7 @@ async def create_job_from_import(
     return job
 
 
-@router.get("/queue")
+@router.get("/queue", response_model=QueueResponse, response_model_exclude_unset=True)
 def queue() -> dict[str, list[object]]:
     return get_import_service().active_queue()
 
@@ -658,7 +734,11 @@ def job_detail(job_id: str) -> dict[str, object]:
     return job
 
 
-@router.patch("/jobs/{job_id}/scheduling")
+@router.patch(
+    "/jobs/{job_id}/scheduling",
+    response_model=SchedulingJobResponse,
+    response_model_exclude_unset=True,
+)
 def update_job_scheduling(
     job_id: str, request: UpdateSchedulingRequest
 ) -> dict[str, object]:
