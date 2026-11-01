@@ -1,5 +1,11 @@
 # Project instructions
 
+## Pull requests and database migrations
+
+In every pull request description, explicitly state whether a database migration
+is required. When one is required, include the command `pnpm run migrate:backend`
+and any relevant migration or deployment considerations.
+
 ## Temporary pre-launch data policy
 
 While this project is in development and has not gone live, preserving existing
