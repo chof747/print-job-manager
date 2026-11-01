@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 
 import {
   createJob,
+  fetchImportReview,
   fetchQueue,
   importGcode,
   type ImportedArtifact,
@@ -11,6 +12,7 @@ import {
 
 export function useJobImport(apiBaseUrl: string | null) {
   const [artifact, setArtifact] = useState<ImportedArtifact | null>(null);
+  const [importId, setImportId] = useState<string | null>(null);
   const [extractedMetadata, setExtractedMetadata] = useState<Record<string, string | number>>({});
   const [provenance, setProvenance] = useState<Record<string, { parser: string; sourceKey: string }>>({});
   const [diagnostics, setDiagnostics] = useState<Array<{ code: string; sourceKey: string }>>([]);
@@ -43,8 +45,12 @@ export function useJobImport(apiBaseUrl: string | null) {
 
     setIsImporting(true);
     try {
-      const result = await importGcode(apiBaseUrl, file);
+      const uploaded = await importGcode(apiBaseUrl, file);
+      const result = uploaded.import?.id
+        ? await fetchImportReview(apiBaseUrl, uploaded.import.id)
+        : uploaded;
       setArtifact(result.artifact);
+      setImportId(uploaded.import?.id ?? null);
       setExtractedMetadata(result.extractedMetadata ?? {});
       setProvenance(result.provenance ?? {});
       setDiagnostics(result.diagnostics ?? []);
@@ -64,7 +70,7 @@ export function useJobImport(apiBaseUrl: string | null) {
     let jobCreated = false;
     setIsCreated(false);
     try {
-      await createJob(apiBaseUrl, artifactId, planningValues);
+      await createJob(apiBaseUrl, importId ?? artifactId, planningValues);
       jobCreated = true;
       setCreateError(null);
       const requestVersion = ++queueRequestVersion.current;
