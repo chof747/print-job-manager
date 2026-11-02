@@ -58,6 +58,7 @@
     "vitest": "^4.1.10"
   },
   "dependencies": {
+    "@tanstack/react-query": "^5.105.0",
     "react-hook-form": "^7.91.0"
   }
 }

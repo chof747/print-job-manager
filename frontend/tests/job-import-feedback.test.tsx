@@ -9,7 +9,9 @@ const artifact = { id: "artifact-calibration-cube", filename: "calibration-cube.
 const job = {
   id: "job-calibration-cube",
   state: "ready",
+  version: 0,
   executionData: { artifactRef: artifact.id },
+  schedulingData: { priority: 0 },
 };
 
 

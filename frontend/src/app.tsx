@@ -1,3 +1,4 @@
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { Fragment, useContext, useEffect, useRef, useState } from "react";
 import { useForm } from "react-hook-form";
 
@@ -84,6 +85,23 @@ function formatExtractedValue(key: string, value: unknown) {
 
 
 export function App() {
+  const [queryClient] = useState(() => new QueryClient());
+  return <QueryClientProvider client={queryClient}><AppContent /></QueryClientProvider>;
+}
+
+function jobFilename(executionData: unknown, artifact: { id: string; filename: string } | null) {
+  if (executionData && typeof executionData === "object") {
+    if ("artifactFilename" in executionData && typeof executionData.artifactFilename === "string") {
+      return executionData.artifactFilename;
+    }
+    if (artifact && "artifactRef" in executionData && executionData.artifactRef === artifact.id) {
+      return artifact.filename;
+    }
+  }
+  return "Legacy G-code job";
+}
+
+function AppContent() {
   const runtimeConfig = useContext(RuntimeConfigContext);
   const bootstrapStateCache = useContext(BootstrapStateCacheContext);
   const hasBootstrappedSuccessfully = useRef(false);
@@ -328,9 +346,10 @@ export function App() {
             {jobs.map((job) => (
               <div key={job.id} className="rounded-xl border border-slate-200 px-4 py-3">
                 <div className="flex items-center justify-between gap-4">
-                  <strong>{job.executionData.artifactFilename ?? (job.executionData.artifactRef === artifact?.id ? artifact.filename : "Legacy G-code job")}</strong>
+                  <strong>{jobFilename(job.executionData, artifact)}</strong>
                   <StatusPill tone="ready">{job.state}</StatusPill>
                 </div>
+                <p className="mt-1 text-sm text-slate-500">Priority: {job.schedulingData.priority}</p>
                 {job.state === "ready" && (
                   editingJob?.id === job.id ? (
                     <div className="mt-3 flex items-end gap-3">

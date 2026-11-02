@@ -1,4 +1,4 @@
-import { cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, expect, it, vi } from "vitest";
 
 import { App } from "../src/app";
@@ -66,10 +66,10 @@ it("edits a queued job priority with its current version and renders the updated
   fireEvent.change(screen.getByLabelText(/^priority$/i), { target: { value: "10" } });
   fireEvent.click(screen.getByRole("button", { name: /save scheduling/i }));
 
-  expect(updateJobScheduling).toHaveBeenCalledWith(apiBaseUrl, job.id, {
+  await waitFor(() => expect(updateJobScheduling).toHaveBeenCalledWith(apiBaseUrl, job.id, {
     priority: 10,
     expectedVersion: 0,
-  });
+  }));
   expect(await screen.findByDisplayValue("10")).toBeInTheDocument();
 });
 
@@ -91,10 +91,10 @@ it("edits a queued job due date with its current version", async () => {
   fireEvent.change(screen.getByLabelText(/due date/i), { target: { value: "2026-11-07" } });
   fireEvent.click(screen.getByRole("button", { name: /save scheduling/i }));
 
-  expect(updateJobScheduling).toHaveBeenCalledWith(apiBaseUrl, job.id, {
+  await waitFor(() => expect(updateJobScheduling).toHaveBeenCalledWith(apiBaseUrl, job.id, {
     dueDate: "2026-11-07",
     expectedVersion: 0,
-  });
+  }));
   expect(await screen.findByDisplayValue("2026-11-07")).toBeInTheDocument();
 });
 
@@ -116,10 +116,10 @@ it("edits queued job notes with its current version", async () => {
   fireEvent.change(screen.getByLabelText(/notes/i), { target: { value: "Deliver before the trade show." } });
   fireEvent.click(screen.getByRole("button", { name: /save scheduling/i }));
 
-  expect(updateJobScheduling).toHaveBeenCalledWith(apiBaseUrl, job.id, expect.objectContaining({
+  await waitFor(() => expect(updateJobScheduling).toHaveBeenCalledWith(apiBaseUrl, job.id, expect.objectContaining({
     notes: "Deliver before the trade show.",
     expectedVersion: 0,
-  }));
+  })));
   expect(await screen.findByDisplayValue("Deliver before the trade show.")).toBeInTheDocument();
 });
 
@@ -141,10 +141,10 @@ it("edits queued job tags with its current version", async () => {
   fireEvent.change(screen.getByLabelText(/tags/i), { target: { value: "customer-order, urgent" } });
   fireEvent.click(screen.getByRole("button", { name: /save scheduling/i }));
 
-  expect(updateJobScheduling).toHaveBeenCalledWith(apiBaseUrl, job.id, expect.objectContaining({
+  await waitFor(() => expect(updateJobScheduling).toHaveBeenCalledWith(apiBaseUrl, job.id, expect.objectContaining({
     tags: ["customer-order", "urgent"],
     expectedVersion: 0,
-  }));
+  })));
   expect(await screen.findByDisplayValue(/customer-order.*urgent/i)).toBeInTheDocument();
 });
 
@@ -164,10 +164,10 @@ it("preserves a comma-containing tag when editing priority", async () => {
   fireEvent.change(screen.getByLabelText(/^priority$/i), { target: { value: "10" } });
   fireEvent.click(screen.getByRole("button", { name: /save scheduling/i }));
 
-  expect(updateJobScheduling).toHaveBeenCalledWith(apiBaseUrl, job.id, {
+  await waitFor(() => expect(updateJobScheduling).toHaveBeenCalledWith(apiBaseUrl, job.id, {
     priority: 10,
     expectedVersion: 0,
-  });
+  }));
   expect(await screen.findByDisplayValue('"customer, urgent"')).toBeInTheDocument();
 });
 
@@ -190,10 +190,10 @@ it("preserves a comma-containing tag when adding another tag", async () => {
   });
   fireEvent.click(screen.getByRole("button", { name: /save scheduling/i }));
 
-  expect(updateJobScheduling).toHaveBeenCalledWith(apiBaseUrl, job.id, {
+  await waitFor(() => expect(updateJobScheduling).toHaveBeenCalledWith(apiBaseUrl, job.id, {
     tags: ["customer, west", "urgent"],
     expectedVersion: 0,
-  });
+  }));
 });
 
 it("edits a queued job preferred printer assignment with its current version", async () => {
@@ -215,10 +215,10 @@ it("edits a queued job preferred printer assignment with its current version", a
   fireEvent.change(screen.getByLabelText(/printer id/i), { target: { value: "printer-mk4" } });
   fireEvent.click(screen.getByRole("button", { name: /save scheduling/i }));
 
-  expect(updateJobScheduling).toHaveBeenCalledWith(apiBaseUrl, job.id, expect.objectContaining({
+  await waitFor(() => expect(updateJobScheduling).toHaveBeenCalledWith(apiBaseUrl, job.id, expect.objectContaining({
     printerAssignment: { mode: "preferred", printerId: "printer-mk4" },
     expectedVersion: 0,
-  }));
+  })));
   expect(await screen.findByDisplayValue("printer-mk4")).toBeInTheDocument();
 });
 
@@ -241,9 +241,9 @@ it("edits a queued job required printer assignment with its current version", as
   fireEvent.change(screen.getByLabelText(/printer id/i), { target: { value: "printer-mk4" } });
   fireEvent.click(screen.getByRole("button", { name: /save scheduling/i }));
 
-  expect(updateJobScheduling).toHaveBeenCalledWith(apiBaseUrl, job.id, expect.objectContaining({
+  await waitFor(() => expect(updateJobScheduling).toHaveBeenCalledWith(apiBaseUrl, job.id, expect.objectContaining({
     printerAssignment: { mode: "required", printerId: "printer-mk4" },
     expectedVersion: 0,
-  }));
+  })));
   expect(await screen.findByDisplayValue("printer-mk4")).toBeInTheDocument();
 });

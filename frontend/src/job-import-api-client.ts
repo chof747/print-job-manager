@@ -1,5 +1,7 @@
 import { ApiError } from "./generated/scheduling/core/ApiError";
 import { SchedulingClient } from "./generated/scheduling/SchedulingClient";
+import type { SchedulingJobResponse } from "./generated/scheduling/models/SchedulingJobResponse";
+import type { UpdateSchedulingRequest } from "./generated/scheduling/models/UpdateSchedulingRequest";
 
 export type ImportedArtifact = {
   id: string;
@@ -15,22 +17,7 @@ export type ImportGcodeResult = {
   missingPlanningValues: string[];
 };
 
-export type Job = {
-  id: string;
-  state: string;
-  version: number;
-  executionData: {
-    artifactRef: string;
-    artifactFilename?: string;
-  };
-  schedulingData: {
-    priority: number;
-    dueDate?: string | null;
-    notes?: string | null;
-    tags?: string[];
-    printerAssignment?: { mode: "preferred" | "required"; printerId: string } | null;
-  };
-};
+export type Job = SchedulingJobResponse;
 
 export type Queue = {
   jobs: Job[];
@@ -104,14 +91,14 @@ export async function fetchQueue(apiBaseUrl: string): Promise<Queue> {
 export async function updateJobScheduling(
   apiBaseUrl: string,
   jobId: string,
-  schedulingData: { priority?: number; dueDate?: string | null; notes?: string | null; tags?: string[]; printerAssignment?: { mode: "preferred" | "required"; printerId: string } | null; expectedVersion: number },
+  schedulingData: UpdateSchedulingRequest,
 ): Promise<Job> {
   try {
     const client = new SchedulingClient({ BASE: apiBaseUrl, ENCODE_PATH: encodeURIComponent });
     return await client.default.updateJobSchedulingApiV1JobsJobIdSchedulingPatch({
       jobId,
       requestBody: schedulingData,
-    }) as unknown as Job;
+    });
   } catch (error: unknown) {
     if (!(error instanceof ApiError)) throw error;
     throw new Error(error.status === 409
