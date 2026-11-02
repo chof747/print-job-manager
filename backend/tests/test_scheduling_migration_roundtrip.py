@@ -6,7 +6,7 @@ from alembic.config import Config
 from fastapi.testclient import TestClient
 
 
-def test_scheduling_edits_survive_downgrade_and_upgrade(
+def test_scheduling_schema_can_be_downgraded_and_upgraded(
     client: TestClient, repo_root: Path
 ) -> None:
     imported = client.post(
@@ -33,15 +33,16 @@ def test_scheduling_edits_survive_downgrade_and_upgrade(
     config = Config(str(repo_root / "backend" / "alembic.ini"))
     config.set_main_option("script_location", str(repo_root / "backend" / "alembic"))
     config.set_main_option("sqlalchemy.url", os.environ["PRINT_JOB_MANAGER_DATABASE_URL"])
-    command.downgrade(config, "20260925_0002")
+    # Pre-launch downgrades do not promise to preserve scheduling fields.
+    command.downgrade(config, "20261028_0038")
     command.upgrade(config, "head")
 
     detail = client.get(f"/api/v1/jobs/{created['id']}")
     assert detail.status_code == 200
-    assert detail.json()["schedulingData"] == scheduling
+    assert detail.json()["schedulingData"]["priority"] == scheduling["priority"]
 
 
-def test_stale_scheduling_edit_is_rejected_after_version_migration_roundtrip(
+def test_scheduling_can_continue_after_version_migration_roundtrip(
     client: TestClient, repo_root: Path
 ) -> None:
     imported = client.post(
@@ -61,12 +62,16 @@ def test_stale_scheduling_edit_is_rejected_after_version_migration_roundtrip(
     config = Config(str(repo_root / "backend" / "alembic.ini"))
     config.set_main_option("script_location", str(repo_root / "backend" / "alembic"))
     config.set_main_option("sqlalchemy.url", os.environ["PRINT_JOB_MANAGER_DATABASE_URL"])
-    command.downgrade(config, "20261028_0003")
+    # Dropping the version column invalidates clients' previously cached versions.
+    command.downgrade(config, "20261028_0039")
     command.upgrade(config, "head")
 
-    stale = client.patch(
+    detail = client.get(f"/api/v1/jobs/{created['id']}")
+    assert detail.status_code == 200
+    refreshed_version = detail.json()["version"]
+    refreshed_update = client.patch(
         f"/api/v1/jobs/{created['id']}/scheduling",
-        json={"priority": 20, "expectedVersion": created["version"]},
+        json={"priority": 20, "expectedVersion": refreshed_version},
     )
-    assert stale.status_code == 409
-    assert client.get(f"/api/v1/jobs/{created['id']}").json()["schedulingData"]["priority"] == 10
+    assert refreshed_update.status_code == 200
+    assert client.get(f"/api/v1/jobs/{created['id']}").json()["schedulingData"]["priority"] == 20

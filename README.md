@@ -26,6 +26,15 @@ The database user must be able to create and drop schemas. The command runs the
 PostgreSQL tests rather than silently skipping them; it does not create the database.
 Tests migrate and downgrade their schemas, so never use a database with valuable data.
 
+### Pre-launch migration rollback
+
+During pre-launch development, database data is disposable and schema downgrades
+do not guarantee data preservation. In particular, downgrading past the job
+scheduling migrations can discard scheduling fields and reset scheduling versions.
+After a rollback and re-upgrade, discard cached edits and reload job details before
+editing; old versions cannot reliably detect stale writes. Revisit this policy
+before production. Never use this policy as permission to delete unrelated data.
+
 ### Disposable database for manual PR testing
 
 With `PRINT_JOB_MANAGER_DATABASE_URL` in `backend/.env` pointing to the original

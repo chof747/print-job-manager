@@ -122,6 +122,9 @@ def migrated_postgresql_schema(
     from backend.app.persistence import database, job_repository, models
 
     app_config.get_settings.cache_clear()
+    # Tests may retain classes imported during collection after these reloads.
+    # Resolve their lazy relationships before the old model registry is released.
+    models.Base.registry.configure()
     importlib.reload(database)
     importlib.reload(models)
     importlib.reload(job_repository)
@@ -147,6 +150,7 @@ def migrated_postgresql_schema(
         else:
             monkeypatch.setenv("PRINT_JOB_MANAGER_DATABASE_URL", original_database_url)
         app_config.get_settings.cache_clear()
+        models.Base.registry.configure()
         importlib.reload(database)
         importlib.reload(models)
         importlib.reload(job_repository)
