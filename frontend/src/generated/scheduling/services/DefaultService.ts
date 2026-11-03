@@ -2,6 +2,7 @@
 /* istanbul ignore file */
 /* tslint:disable */
 /* eslint-disable */
+import type { CockpitResponse } from '../models/CockpitResponse';
 import type { SchedulingJobResponse } from '../models/SchedulingJobResponse';
 import type { UpdateSchedulingRequest } from '../models/UpdateSchedulingRequest';
 import type { CancelablePromise } from '../core/CancelablePromise';
@@ -28,6 +29,87 @@ export class DefaultService {
             },
             body: requestBody,
             mediaType: 'application/json',
+            errors: {
+                422: `Validation Error`,
+            },
+        });
+    }
+    /**
+     * Cockpit
+     * @returns CockpitResponse Successful Response
+     * @throws ApiError
+     */
+    public cockpitApiV1CockpitGet({
+        diagnosticCode,
+        material,
+        minDurationSeconds,
+        minPriority,
+        dueBefore,
+        tag,
+        assignmentMode,
+        maxFilamentWeightGrams,
+        nozzleDiameter,
+        maxDimensionX,
+        maxDimensionY,
+        maxDimensionZ,
+        slicer,
+        provenanceParser,
+    }: {
+        diagnosticCode?: (string | null),
+        material?: (string | null),
+        minDurationSeconds?: (number | null),
+        minPriority?: (number | null),
+        dueBefore?: (string | null),
+        tag?: (string | null),
+        assignmentMode?: (string | null),
+        maxFilamentWeightGrams?: (number | null),
+        nozzleDiameter?: (number | null),
+        maxDimensionX?: (number | null),
+        maxDimensionY?: (number | null),
+        maxDimensionZ?: (number | null),
+        slicer?: (string | null),
+        provenanceParser?: (string | null),
+    }): CancelablePromise<CockpitResponse> {
+        return this.httpRequest.request({
+            method: 'GET',
+            url: '/cockpit',
+            query: {
+                'diagnosticCode': diagnosticCode,
+                'material': material,
+                'minDurationSeconds': minDurationSeconds,
+                'minPriority': minPriority,
+                'dueBefore': dueBefore,
+                'tag': tag,
+                'assignmentMode': assignmentMode,
+                'maxFilamentWeightGrams': maxFilamentWeightGrams,
+                'nozzleDiameter': nozzleDiameter,
+                'maxDimensionX': maxDimensionX,
+                'maxDimensionY': maxDimensionY,
+                'maxDimensionZ': maxDimensionZ,
+                'slicer': slicer,
+                'provenanceParser': provenanceParser,
+            },
+            errors: {
+                422: `Validation Error`,
+            },
+        });
+    }
+    /**
+     * Job Detail
+     * @returns SchedulingJobResponse Successful Response
+     * @throws ApiError
+     */
+    public jobDetailApiV1JobsJobIdGet({
+        jobId,
+    }: {
+        jobId: string,
+    }): CancelablePromise<SchedulingJobResponse> {
+        return this.httpRequest.request({
+            method: 'GET',
+            url: '/jobs/{job_id}',
+            path: {
+                'job_id': jobId,
+            },
             errors: {
                 422: `Validation Error`,
             },

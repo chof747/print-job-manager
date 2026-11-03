@@ -24,6 +24,7 @@ function jsonResponse(body: unknown, status = 200) {
   return {
     ok: status >= 200 && status < 300,
     status,
+    headers: { get: () => "application/json" },
     json: async () => body,
   };
 }
@@ -260,6 +261,10 @@ describe("G-code import", () => {
 
       if (url === `${apiBaseUrl}/config`) {
         return jsonResponse({ appName: "print-job-manager", apiBasePath: "/api/v1" });
+      }
+
+      if (url === `${apiBaseUrl}/cockpit`) {
+        return jsonResponse({ activeJobs: [], failures: [], recentHistory: [] });
       }
 
       if (url === `${apiBaseUrl}/import` && init?.method === "POST") {

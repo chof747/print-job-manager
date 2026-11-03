@@ -10,6 +10,8 @@ export { CancelablePromise, CancelError } from './core/CancelablePromise';
 export { OpenAPI } from './core/OpenAPI';
 export type { OpenAPIConfig } from './core/OpenAPI';
 
+export type { CockpitResponse } from './models/CockpitResponse';
+export type { ExecutionDataResponse } from './models/ExecutionDataResponse';
 export type { HTTPValidationError } from './models/HTTPValidationError';
 export type { PreferredPrinterAssignment } from './models/PreferredPrinterAssignment';
 export type { SchedulingDataResponse } from './models/SchedulingDataResponse';

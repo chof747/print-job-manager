@@ -2,12 +2,13 @@
 /* istanbul ignore file */
 /* tslint:disable */
 /* eslint-disable */
+import type { ExecutionDataResponse } from './ExecutionDataResponse';
 import type { SchedulingDataResponse } from './SchedulingDataResponse';
 export type SchedulingJobResponse = {
     id: string;
     state: string;
     version: number;
-    executionData: Record<string, any>;
+    executionData: ExecutionDataResponse;
     schedulingData: SchedulingDataResponse;
 };
 

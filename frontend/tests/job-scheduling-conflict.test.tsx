@@ -15,6 +15,11 @@ it("informs the user when a scheduling edit is stale and preserves the draft", a
     if (url === "/runtime-config.json") return { ok: true, json: async () => ({ apiBaseUrl }) };
     if (url === `${apiBaseUrl}/health`) return { ok: true, json: async () => ({ status: "ok" }) };
     if (url === `${apiBaseUrl}/config`) return { ok: true, json: async () => ({ appName: "print-job-manager" }) };
+    if (url === `${apiBaseUrl}/cockpit`) return { ok: true, headers: { get: (): string => "application/json" }, json: async () => ({ activeJobs: [{
+      id: "job-1", state: "ready", version: 0,
+      executionData: { artifactRef: "sha256:job", artifactFilename: "job.gcode" },
+      schedulingData: { priority: 0 },
+    }], failures: [], recentHistory: [] }) };
     if (url === `${apiBaseUrl}/queue`) return { ok: true, json: async () => ({ jobs: [{
       id: "job-1", state: "ready", version: 0,
       executionData: { artifactRef: "sha256:job", artifactFilename: "job.gcode" },
@@ -22,6 +27,7 @@ it("informs the user when a scheduling edit is stale and preserves the draft", a
     }] }) };
     if (url === `${apiBaseUrl}/jobs/job-1/scheduling`) return {
       ok: false, status: 409,
+      headers: { get: () => "application/json" },
       json: async () => ({ detail: { code: "version_conflict", currentVersion: 1 } }),
     };
     throw new Error(`Unexpected API request: ${url}`);

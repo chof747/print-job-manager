@@ -3,10 +3,11 @@ import { afterEach, expect, it, vi } from "vitest";
 
 import { App } from "../src/app";
 
-const { fetchBackendConfig, fetchBackendHealth, fetchQueue, loadRuntimeConfig, updateJobScheduling } = vi.hoisted(() => ({
+const { fetchBackendConfig, fetchBackendHealth, fetchQueue, fetchCockpit, loadRuntimeConfig, updateJobScheduling } = vi.hoisted(() => ({
   fetchBackendConfig: vi.fn(),
   fetchBackendHealth: vi.fn(),
   fetchQueue: vi.fn(),
+  fetchCockpit: vi.fn(),
   loadRuntimeConfig: vi.fn(),
   updateJobScheduling: vi.fn(),
 }));
@@ -14,7 +15,7 @@ const { fetchBackendConfig, fetchBackendHealth, fetchQueue, loadRuntimeConfig, u
 vi.mock("../src/runtime-config", () => ({ loadRuntimeConfig }));
 vi.mock("../src/backend-health", () => ({ fetchBackendConfig, fetchBackendHealth }));
 vi.mock("../src/job-import-api-client", () => ({
-  importGcode: vi.fn(), createJob: vi.fn(), fetchQueue, updateJobScheduling,
+  importGcode: vi.fn(), createJob: vi.fn(), fetchQueue, fetchCockpit, updateJobScheduling,
 }));
 
 afterEach(() => {
@@ -31,6 +32,11 @@ it("does not silently save a blank priority as zero", async () => {
     executionData: { artifactRef: "sha256:job", artifactFilename: "job.gcode" },
     schedulingData: { priority: 10 },
   }] });
+  fetchCockpit.mockResolvedValue({ activeJobs: [{
+    id: "job-1", state: "ready", version: 0,
+    executionData: { artifactRef: "sha256:job", artifactFilename: "job.gcode" },
+    schedulingData: { priority: 10 },
+  }], failures: [], recentHistory: [] });
 
   render(<App />);
   await screen.findByText("job.gcode");

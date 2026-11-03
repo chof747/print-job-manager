@@ -13,10 +13,11 @@ from threading import Lock
 from typing import Annotated, Literal, Protocol
 from uuid import uuid4
 
-from fastapi import APIRouter, File, HTTPException, Response, UploadFile, status
+from fastapi import APIRouter, File, HTTPException, Query, Response, UploadFile, status
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 from pydantic.json_schema import SkipJsonSchema
 
+from ...cockpit import CockpitFilters, filter_queue_jobs, project_cockpit
 from ...config import get_settings
 from ...persistence.import_repository import SqlAlchemyImportRepository
 from ...persistence.job_repository import (
@@ -58,18 +59,32 @@ class SchedulingDataResponse(BaseModel):
     )
 
 
+class ExecutionDataResponse(BaseModel):
+    model_config = ConfigDict(extra="allow")
+
+    material: str | None = None
+    artifact_filename: str | None = Field(default=None, alias="artifactFilename")
+    nozzle_diameter: float | None = Field(default=None, alias="nozzleDiameter")
+
+
 class SchedulingJobResponse(BaseModel):
     model_config = ConfigDict(extra="allow")
 
     id: str
     state: str
     version: int
-    execution_data: dict[str, object] = Field(alias="executionData")
+    execution_data: ExecutionDataResponse = Field(alias="executionData")
     scheduling_data: SchedulingDataResponse = Field(alias="schedulingData")
 
 
 class QueueResponse(BaseModel):
     jobs: list[SchedulingJobResponse]
+
+
+class CockpitResponse(BaseModel):
+    active_jobs: list[SchedulingJobResponse] = Field(alias="activeJobs")
+    failures: list[SchedulingJobResponse]
+    recent_history: list[SchedulingJobResponse] = Field(alias="recentHistory")
 
 
 class UpdateSchedulingRequest(BaseModel):
@@ -164,6 +179,8 @@ class JobRepository(Protocol):
     ) -> tuple[dict[str, object], bool]: ...
 
     def active_queue(self) -> dict[str, list[object]]: ...
+
+    def cockpit_jobs(self) -> list[dict[str, object]]: ...
 
     def get_job(self, job_id: str) -> dict[str, object] | None: ...
 
@@ -444,6 +461,10 @@ class InMemoryJobRepository:
             for job in self.active_jobs:
                 jobs.append(deepcopy(job))
             return {"jobs": jobs}
+
+    def cockpit_jobs(self) -> list[dict[str, object]]:
+        with self.lock:
+            return deepcopy(self.active_jobs)
 
     def get_job(self, job_id: str) -> dict[str, object] | None:
         with self.lock:
@@ -822,11 +843,54 @@ def import_review(artifact_id: str) -> dict[str, object]:
 
 
 @router.get("/queue", response_model=QueueResponse, response_model_exclude_unset=True)
-def queue() -> dict[str, list[object]]:
-    return get_import_service().active_queue()
+def queue(
+    material: str | None = None,
+    min_duration_seconds: int | None = Query(default=None, alias="minDurationSeconds"),
+    min_priority: int | None = Query(default=None, alias="minPriority"),
+) -> dict[str, list[object]]:
+    return filter_queue_jobs(
+        get_import_service().active_queue(), material, min_duration_seconds, min_priority
+    )
 
 
-@router.get("/jobs/{job_id}")
+@router.get("/cockpit", response_model=CockpitResponse, response_model_exclude_unset=True)
+def cockpit(
+    diagnostic_code: str | None = Query(default=None, alias="diagnosticCode"),
+    material: str | None = None,
+    min_duration_seconds: int | None = Query(default=None, alias="minDurationSeconds"),
+    min_priority: int | None = Query(default=None, alias="minPriority"),
+    due_before: date | None = Query(default=None, alias="dueBefore"),
+    tag: str | None = None,
+    assignment_mode: str | None = Query(default=None, alias="assignmentMode"),
+    max_filament_weight_grams: float | None = Query(default=None, alias="maxFilamentWeightGrams"),
+    nozzle_diameter: float | None = Query(default=None, alias="nozzleDiameter"),
+    max_dimension_x: float | None = Query(default=None, alias="maxDimensionX"),
+    max_dimension_y: float | None = Query(default=None, alias="maxDimensionY"),
+    max_dimension_z: float | None = Query(default=None, alias="maxDimensionZ"),
+    slicer: str | None = None,
+    provenance_parser: str | None = Query(default=None, alias="provenanceParser"),
+) -> dict[str, list[dict[str, object]]]:
+    return project_cockpit(
+        list(get_import_service().job_repository.cockpit_jobs()),
+        CockpitFilters(
+            diagnostic_code=diagnostic_code,
+            material=material,
+            min_duration_seconds=min_duration_seconds,
+            min_priority=min_priority,
+            due_before=due_before,
+            tag=tag,
+            assignment_mode=assignment_mode,
+            max_filament_weight_grams=max_filament_weight_grams,
+            nozzle_diameter=nozzle_diameter,
+            max_dimension_x=max_dimension_x,
+            max_dimension_y=max_dimension_y,
+            max_dimension_z=max_dimension_z,
+            slicer=slicer,
+            provenance_parser=provenance_parser,
+        ),
+    )
+
+@router.get("/jobs/{job_id}", response_model=SchedulingJobResponse, response_model_exclude_unset=True)
 def job_detail(job_id: str) -> dict[str, object]:
     job = get_import_service().get_job(job_id)
     if job is None:

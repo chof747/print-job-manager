@@ -4,7 +4,7 @@ import { afterEach, expect, it, vi } from "vitest";
 import { App } from "../src/app";
 
 const api = vi.hoisted(() => ({
-  fetchBackendConfig: vi.fn(), fetchBackendHealth: vi.fn(), fetchQueue: vi.fn(),
+  fetchBackendConfig: vi.fn(), fetchBackendHealth: vi.fn(), fetchQueue: vi.fn(), fetchCockpit: vi.fn(),
   loadRuntimeConfig: vi.fn(), updateJobScheduling: vi.fn(), importGcode: vi.fn(), createJob: vi.fn(),
 }));
 
@@ -31,6 +31,7 @@ it("does not show a previous job's failed save on another job's edit form", asyn
   api.fetchBackendHealth.mockResolvedValue({ status: "ok" });
   api.fetchBackendConfig.mockResolvedValue({ appName: "print-job-manager" });
   api.fetchQueue.mockResolvedValue({ jobs: [job, otherJob] });
+  api.fetchCockpit.mockResolvedValue({ activeJobs: [job, otherJob], failures: [], recentHistory: [] });
   api.updateJobScheduling.mockReturnValue(pendingSave);
 
   render(<App />);
