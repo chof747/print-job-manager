@@ -10,6 +10,7 @@
     "update": "uv sync --project backend --group test && pnpm sync",
     "check:backend": "PRINT_JOB_MANAGER_REQUIRE_TEST_DATABASE=1 uv run --project backend pytest backend/tests -q",
     "check:frontend": "vitest run frontend/",
+    "generate:scheduling-client": "uv run --project backend python -m scripts.generate_scheduling_client",
     "migrate:backend": "cd backend && PYTHONPATH=.. uv run alembic -c alembic.ini upgrade head",
     "db:clone": "uv run --project backend python scripts/pr_database.py create",
     "db:dispose": "uv run --project backend python scripts/pr_database.py dispose",
@@ -47,6 +48,7 @@
     "@types/react": "^19.2.18",
     "@types/react-dom": "^19.2.4",
     "jsdom": "^30.0.1",
+    "openapi-typescript-codegen": "^0.31.0",
     "react": "^19.2.8",
     "react-dom": "^19.2.8",
     "tailwindcss": "^4.3.3",
@@ -54,5 +56,9 @@
     "typescript": "^7.0.2",
     "vite": "^8.2.1",
     "vitest": "^4.1.10"
+  },
+  "dependencies": {
+    "@tanstack/react-query": "^5.105.0",
+    "react-hook-form": "^7.91.0"
   }
 }

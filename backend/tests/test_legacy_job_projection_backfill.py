@@ -65,6 +65,7 @@ def test_legacy_job_priority_and_history_survive_migration_and_restart(
         command.upgrade(config, "head")
 
         importlib.reload(database)
+        models.Base.registry.configure()
         importlib.reload(models)
         importlib.reload(job_repository)
         importlib.reload(jobs)
@@ -102,6 +103,7 @@ def test_legacy_job_priority_and_history_survive_migration_and_restart(
             monkeypatch.setenv("PRINT_JOB_MANAGER_DATABASE_URL", original_url)
         app_config.get_settings.cache_clear()
         importlib.reload(database)
+        models.Base.registry.configure()
         importlib.reload(models)
         importlib.reload(job_repository)
         importlib.reload(jobs)

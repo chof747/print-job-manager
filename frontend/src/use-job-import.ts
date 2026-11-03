@@ -1,5 +1,7 @@
-import { useEffect, useRef, useState } from "react";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useRef, useState } from "react";
 
+import type { UpdateSchedulingRequest } from "./generated/scheduling/models/UpdateSchedulingRequest";
 import {
   createJob,
   fetchImportReview,
@@ -9,6 +11,7 @@ import {
   type Job,
   type PlanningValues,
 } from "./job-import-api-client";
+import { useJobScheduling } from "./use-job-scheduling";
 
 export function useJobImport(apiBaseUrl: string | null) {
   const [artifact, setArtifact] = useState<ImportedArtifact | null>(null);
@@ -17,26 +20,27 @@ export function useJobImport(apiBaseUrl: string | null) {
   const [provenance, setProvenance] = useState<Record<string, { parser: string; sourceKey: string }>>({});
   const [diagnostics, setDiagnostics] = useState<Array<{ code: string; sourceKey: string }>>([]);
   const [missingPlanningValues, setMissingPlanningValues] = useState<string[]>([]);
-  const [jobs, setJobs] = useState<Job[]>([]);
+  const queryClient = useQueryClient();
+  const queueKey = ["active-queue", apiBaseUrl];
+  const { data: jobs = [] } = useQuery<Job[]>({
+    queryKey: queueKey,
+    queryFn: async () => (await fetchQueue(apiBaseUrl!)).jobs,
+    enabled: apiBaseUrl !== null,
+    retry: false,
+    staleTime: Infinity,
+    structuralSharing: (oldData, newData) => {
+      const currentJobs = oldData as Job[] | undefined;
+      return (newData as Job[]).map((queuedJob) => {
+        const currentJob = currentJobs?.find((item) => item.id === queuedJob.id);
+        return currentJob && currentJob.version > queuedJob.version ? currentJob : queuedJob;
+      });
+    },
+  });
   const [createError, setCreateError] = useState<string | null>(null);
   const [isCreated, setIsCreated] = useState(false);
   const [isImporting, setIsImporting] = useState(false);
   const queueRequestVersion = useRef(0);
-
-  useEffect(() => {
-    if (!apiBaseUrl) {
-      return;
-    }
-
-    const requestVersion = ++queueRequestVersion.current;
-    void fetchQueue(apiBaseUrl)
-      .then((queue) => {
-        if (requestVersion === queueRequestVersion.current) {
-          setJobs(queue.jobs);
-        }
-      })
-      .catch(() => {});
-  }, [apiBaseUrl]);
+  const schedulingMutation = useJobScheduling();
 
   async function importFile(file: File | undefined) {
     if (!apiBaseUrl || !file) {
@@ -74,9 +78,13 @@ export function useJobImport(apiBaseUrl: string | null) {
       jobCreated = true;
       setCreateError(null);
       const requestVersion = ++queueRequestVersion.current;
+      await queryClient.cancelQueries({ queryKey: queueKey, exact: true });
       const queue = await fetchQueue(apiBaseUrl);
       if (requestVersion === queueRequestVersion.current) {
-        setJobs(queue.jobs);
+        queryClient.setQueryData<Job[]>(queueKey, (currentJobs = []) => queue.jobs.map((queuedJob) => {
+          const currentJob = currentJobs.find((item) => item.id === queuedJob.id);
+          return currentJob && currentJob.version > queuedJob.version ? currentJob : queuedJob;
+        }));
       }
       setIsCreated(true);
     } catch (error: unknown) {
@@ -103,5 +111,21 @@ export function useJobImport(apiBaseUrl: string | null) {
     }
   }
 
-  return { artifact, extractedMetadata, provenance, diagnostics, missingPlanningValues, jobs, createError, isCreated, isImporting, importFile, create };
+  async function updateScheduling(job: Job, changes: Omit<UpdateSchedulingRequest, "expectedVersion">) {
+    if (!apiBaseUrl) {
+      return;
+    }
+
+    const updatedJob = await schedulingMutation.mutateAsync({
+      apiBaseUrl,
+      jobId: job.id,
+      changes: { ...changes, expectedVersion: job.version },
+    });
+    queryClient.setQueryData<Job[]>(queueKey, (currentJobs = []) => currentJobs.map((currentJob) =>
+      currentJob.id === updatedJob.id && currentJob.version <= updatedJob.version ? updatedJob : currentJob,
+    ));
+    return updatedJob;
+  }
+
+  return { artifact, extractedMetadata, provenance, diagnostics, missingPlanningValues, jobs, createError, isCreated, isImporting, importFile, create, updateScheduling };
 }

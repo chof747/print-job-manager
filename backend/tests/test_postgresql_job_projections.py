@@ -37,6 +37,7 @@ def unmigrated_postgresql_client(
 
     app_config.get_settings.cache_clear()
     importlib.reload(database)
+    models.Base.registry.configure()
     importlib.reload(models)
     importlib.reload(job_repository)
     importlib.reload(jobs)
@@ -89,6 +90,7 @@ def test_import_to_ready_job_persists_the_artifact_snapshot_and_creation_history
 
     app_config.get_settings.cache_clear()
     importlib.reload(database)
+    models.Base.registry.configure()
     importlib.reload(models)
     importlib.reload(job_repository)
     importlib.reload(jobs)
@@ -189,6 +191,7 @@ def test_fresh_backend_creates_a_job_from_a_persisted_import_with_its_metadata_s
 
     app_config.get_settings.cache_clear()
     importlib.reload(database)
+    models.Base.registry.configure()
     importlib.reload(models)
     importlib.reload(job_repository)
     importlib.reload(jobs)
@@ -272,6 +275,7 @@ def test_created_job_is_loaded_by_fresh_backend_detail_and_queue_projections(
 
     app_config.get_settings.cache_clear()
     importlib.reload(database)
+    models.Base.registry.configure()
     importlib.reload(models)
     importlib.reload(job_repository)
     importlib.reload(jobs)

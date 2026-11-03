@@ -609,6 +609,7 @@ def test_created_job_can_be_loaded_through_its_detail_projection_after_backend_r
 
     app_config.get_settings.cache_clear()
     importlib.reload(database)
+    models.Base.registry.configure()
     importlib.reload(models)
     importlib.reload(job_repository)
     importlib.reload(jobs)

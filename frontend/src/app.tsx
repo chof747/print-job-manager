@@ -1,6 +1,9 @@
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { Fragment, useContext, useEffect, useRef, useState } from "react";
+import { useForm } from "react-hook-form";
 
 import { fetchBackendConfig, fetchBackendHealth } from "./backend-health";
+import type { Job } from "./job-import-api-client";
 import { loadRuntimeConfig } from "./runtime-config";
 import { BootstrapStateCacheContext, RuntimeConfigContext } from "./runtime-config-gate";
 import { Badge, Button, Card, FormField, ReasonList, StatusPill, Stepper } from "./ui";
@@ -15,6 +18,63 @@ function formatEstimatedDuration(seconds: number) {
   return hours ? `${hours}h ${minutes}m ${remainingSeconds}s` : `${minutes}m ${remainingSeconds}s`;
 }
 
+function formatTags(tags: string[]) {
+  return tags.map((tag) =>
+    !tag || /[",\r\n]/.test(tag) || tag !== tag.trim()
+      ? `"${tag.replace(/"/g, '""')}"`
+      : tag,
+  ).join(", ");
+}
+
+function parseTags(input: string): string[] {
+  const tags: string[] = [];
+  let index = 0;
+  while (index < input.length) {
+    while (index < input.length && /\s/.test(input[index])) index++;
+    let tag = "";
+    if (input[index] === '"') {
+      index++;
+      let closed = false;
+      while (index < input.length) {
+        if (input[index] === '"') {
+          if (input[index + 1] === '"') {
+            tag += '"';
+            index += 2;
+          } else {
+            index++;
+            closed = true;
+            break;
+          }
+        } else {
+          tag += input[index++];
+        }
+      }
+      while (index < input.length && /\s/.test(input[index])) index++;
+      if (!closed || (index < input.length && input[index] !== ",")) {
+        throw new Error("Invalid quoted tag");
+      }
+      tags.push(tag);
+    } else {
+      while (index < input.length && input[index] !== ",") {
+        if (input[index] === '"') throw new Error("Invalid quoted tag");
+        tag += input[index++];
+      }
+      if (tag.trim()) tags.push(tag.trim());
+    }
+    if (input[index] === ",") index++;
+  }
+  return tags;
+}
+
+type SchedulingFormValues = {
+  priority: string;
+  dueDate: string;
+  notes: string;
+  tags: string;
+  assignmentMode: "" | "preferred" | "required";
+  printerId: string;
+};
+
 function formatExtractedValue(key: string, value: unknown) {
   if (key === "estimatedDuration" && typeof value === "number") return formatEstimatedDuration(value);
   if (key === "dimensions" && value && typeof value === "object" && "x" in value && "y" in value && "z" in value) {
@@ -25,6 +85,23 @@ function formatExtractedValue(key: string, value: unknown) {
 
 
 export function App() {
+  const [queryClient] = useState(() => new QueryClient());
+  return <QueryClientProvider client={queryClient}><AppContent /></QueryClientProvider>;
+}
+
+function jobFilename(executionData: unknown, artifact: { id: string; filename: string } | null) {
+  if (executionData && typeof executionData === "object") {
+    if ("artifactFilename" in executionData && typeof executionData.artifactFilename === "string") {
+      return executionData.artifactFilename;
+    }
+    if (artifact && "artifactRef" in executionData && executionData.artifactRef === artifact.id) {
+      return artifact.filename;
+    }
+  }
+  return "Legacy G-code job";
+}
+
+function AppContent() {
   const runtimeConfig = useContext(RuntimeConfigContext);
   const bootstrapStateCache = useContext(BootstrapStateCacheContext);
   const hasBootstrappedSuccessfully = useRef(false);
@@ -34,7 +111,14 @@ export function App() {
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [importError, setImportError] = useState<string | null>(null);
   const [planningValues, setPlanningValues] = useState<Record<string, string>>({});
-  const { artifact, extractedMetadata, provenance, diagnostics, missingPlanningValues, jobs, createError, isCreated, isImporting, importFile, create } = useJobImport(apiBaseUrl);
+  const [editingJob, setEditingJob] = useState<Job | null>(null);
+  const editingSession = useRef(0);
+  const [schedulingError, setSchedulingError] = useState<string | null>(null);
+  const { register, reset, getValues, watch } = useForm<SchedulingFormValues>({
+    defaultValues: { priority: "", dueDate: "", notes: "", tags: "", assignmentMode: "", printerId: "" },
+  });
+  const assignmentMode = watch("assignmentMode");
+  const { artifact, extractedMetadata, provenance, diagnostics, missingPlanningValues, jobs, createError, isCreated, isImporting, importFile, create, updateScheduling } = useJobImport(apiBaseUrl);
 
   useEffect(() => {
     let isActive = true;
@@ -125,6 +209,34 @@ export function App() {
     }
 
     await create(artifact.id, planningValues);
+  }
+
+  async function handleSaveScheduling(job: (typeof jobs)[number]) {
+    const session = editingSession.current;
+    const { priority, dueDate, notes, tags, assignmentMode, printerId } = getValues();
+    const printerAssignment = assignmentMode ? { mode: assignmentMode, printerId } : null;
+    setSchedulingError(null);
+    if (!priority.trim()) {
+      setSchedulingError("Priority is required");
+      return;
+    }
+    try {
+      const parsedTags = parseTags(tags);
+      const updatedJob = await updateScheduling(job, {
+      ...(Number(priority) !== job.schedulingData.priority ? { priority: Number(priority) } : {}),
+      ...(dueDate !== (job.schedulingData.dueDate ?? "") ? { dueDate: dueDate || null } : {}),
+      ...(notes !== (job.schedulingData.notes ?? "") ? { notes } : {}),
+      ...(tags !== formatTags(job.schedulingData.tags ?? []) ? { tags: parsedTags } : {}),
+      ...(JSON.stringify(printerAssignment) !== JSON.stringify(job.schedulingData.printerAssignment ?? null) ? { printerAssignment } : {}),
+      });
+      if (updatedJob && editingSession.current === session) {
+        setEditingJob((currentJob) => currentJob?.id === job.id ? updatedJob : currentJob);
+      }
+    } catch (error: unknown) {
+      if (editingSession.current === session) {
+        setSchedulingError(error instanceof Error ? error.message : "Unable to update job scheduling");
+      }
+    }
   }
 
   const formatPlanningValueLabel = (value: string) => value.replace(/([a-z])([A-Z])/g, "$1 $2");
@@ -232,9 +344,79 @@ export function App() {
           <p className="mt-1 text-sm text-slate-500">The queue is the scheduler's projection of active jobs.</p>
           <div className="mt-4 grid gap-2">
             {jobs.map((job) => (
-              <div key={job.id} className="flex items-center justify-between gap-4 rounded-xl border border-slate-200 px-4 py-3">
-                <strong>{job.executionData.artifactFilename ?? (job.executionData.artifactRef === artifact?.id ? artifact.filename : "Legacy G-code job")}</strong>
-                <StatusPill tone="ready">{job.state}</StatusPill>
+              <div key={job.id} className="rounded-xl border border-slate-200 px-4 py-3">
+                <div className="flex items-center justify-between gap-4">
+                  <strong>{jobFilename(job.executionData, artifact)}</strong>
+                  <StatusPill tone="ready">{job.state}</StatusPill>
+                </div>
+                <p className="mt-1 text-sm text-slate-500">Priority: {job.schedulingData.priority}</p>
+                {job.state === "ready" && (
+                  editingJob?.id === job.id ? (
+                    <div className="mt-3 flex items-end gap-3">
+                      <FormField label="Priority">
+                        <input
+                          type="number"
+                          className="rounded-xl border border-slate-300 bg-white px-3 py-2 text-slate-900 shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-400"
+                          {...register("priority")}
+                        />
+                      </FormField>
+                      <FormField label="Due date">
+                        <input
+                          type="date"
+                          className="rounded-xl border border-slate-300 bg-white px-3 py-2 text-slate-900 shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-400"
+                          {...register("dueDate")}
+                        />
+                      </FormField>
+                      <FormField label="Notes">
+                        <textarea
+                          className="rounded-xl border border-slate-300 bg-white px-3 py-2 text-slate-900 shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-400"
+                          {...register("notes")}
+                        />
+                      </FormField>
+                      <FormField label="Tags">
+                        <input
+                          className="rounded-xl border border-slate-300 bg-white px-3 py-2 text-slate-900 shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-400"
+                          {...register("tags")}
+                        />
+                      </FormField>
+                      <FormField label="Assignment mode">
+                        <select {...register("assignmentMode")}>
+                          <option value="">None</option>
+                          <option value="preferred">Preferred</option>
+                          <option value="required">Required</option>
+                        </select>
+                      </FormField>
+                      {assignmentMode !== "" && (
+                        <FormField label="Printer ID">
+                          <input {...register("printerId")} />
+                        </FormField>
+                      )}
+                      {schedulingError && <p role="alert">{schedulingError}</p>}
+                      <Button type="button" onClick={() => void handleSaveScheduling(editingJob)}>Save scheduling</Button>
+                    </div>
+                  ) : (
+                    <Button
+                      type="button"
+                      variant="secondary"
+                      className="mt-3"
+                      onClick={() => {
+                        editingSession.current++;
+                        setEditingJob(job);
+                        setSchedulingError(null);
+                        reset({
+                          priority: String(job.schedulingData.priority),
+                          dueDate: job.schedulingData.dueDate ?? "",
+                          notes: job.schedulingData.notes ?? "",
+                          tags: formatTags(job.schedulingData.tags ?? []),
+                          assignmentMode: job.schedulingData.printerAssignment?.mode ?? "",
+                          printerId: job.schedulingData.printerAssignment?.printerId ?? "",
+                        });
+                      }}
+                    >
+                      Edit scheduling
+                    </Button>
+                  )
+                )}
               </div>
             ))}
             {!jobs.length && <p className="rounded-xl bg-slate-50 px-4 py-3 text-sm text-slate-500">No active jobs yet.</p>}

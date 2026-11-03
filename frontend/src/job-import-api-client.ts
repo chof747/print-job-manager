@@ -1,3 +1,8 @@
+import { ApiError } from "./generated/scheduling/core/ApiError";
+import { SchedulingClient } from "./generated/scheduling/SchedulingClient";
+import type { SchedulingJobResponse } from "./generated/scheduling/models/SchedulingJobResponse";
+import type { UpdateSchedulingRequest } from "./generated/scheduling/models/UpdateSchedulingRequest";
+
 export type ImportedArtifact = {
   id: string;
   filename: string;
@@ -12,14 +17,7 @@ export type ImportGcodeResult = {
   missingPlanningValues: string[];
 };
 
-export type Job = {
-  id: string;
-  state: string;
-  executionData: {
-    artifactRef: string;
-    artifactFilename?: string;
-  };
-};
+export type Job = SchedulingJobResponse;
 
 export type Queue = {
   jobs: Job[];
@@ -40,10 +38,6 @@ export type CreateJobRequest = {
   planningValues: PlanningValues;
 };
 
-/**
- * Typed API operations shaped for replacement by an OpenAPI generator.
- * The implementation remains local until generation is introduced.
- */
 export async function importGcode(apiBaseUrl: string, file: File): Promise<ImportGcodeResult> {
   const formData = new FormData();
   formData.append("file", file);
@@ -92,4 +86,23 @@ export async function fetchQueue(apiBaseUrl: string): Promise<Queue> {
   }
 
   return response.json() as Promise<Queue>;
+}
+
+export async function updateJobScheduling(
+  apiBaseUrl: string,
+  jobId: string,
+  schedulingData: UpdateSchedulingRequest,
+): Promise<Job> {
+  try {
+    const client = new SchedulingClient({ BASE: apiBaseUrl, ENCODE_PATH: encodeURIComponent });
+    return await client.default.updateJobSchedulingApiV1JobsJobIdSchedulingPatch({
+      jobId,
+      requestBody: schedulingData,
+    });
+  } catch (error: unknown) {
+    if (!(error instanceof ApiError)) throw error;
+    throw new Error(error.status === 409
+      ? "Scheduling has changed. Refresh the job before saving again."
+      : "Unable to update job scheduling");
+  }
 }

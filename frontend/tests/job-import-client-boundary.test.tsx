@@ -10,6 +10,8 @@ const artifactId = "artifact-calibration-cube";
 const job = {
   id: `job-${artifactId}`,
   state: "ready",
+  version: 0,
+  schedulingData: { priority: 0 },
   executionData: {
     artifactRef: artifactId,
     material: "PLA",
