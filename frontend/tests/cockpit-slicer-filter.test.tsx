@@ -33,6 +33,8 @@ it("lets an operator slice the cockpit by slicer", async () => {
 
   render(<App />);
   await screen.findByText("other.gcode");
+  if (screen.queryByRole("button", { name: "Open filter rail" })) fireEvent.click(screen.getByRole("button", { name: "Open filter rail" }));
+  fireEvent.click(screen.getByRole("button", { name: "Source & diagnostics" }));
   fireEvent.change(screen.getByLabelText(/slicer/i), { target: { value: "PrusaSlicer" } });
   fireEvent.click(screen.getByRole("button", { name: /apply filters/i }));
 

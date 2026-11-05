@@ -33,6 +33,7 @@ it("lets an operator slice the cockpit by due date", async () => {
 
   render(<App />);
   await screen.findByText("other.gcode");
+  fireEvent.click(screen.getByRole("button", { name: "Open filter rail" }));
   fireEvent.change(screen.getByLabelText(/due (?:before|by)/i), { target: { value: "2026-11-08" } });
   fireEvent.click(screen.getByRole("button", { name: /apply filters/i }));
 

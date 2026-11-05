@@ -33,6 +33,8 @@ it("lets an operator slice the cockpit by maximum filament consumption", async (
 
   render(<App />);
   await screen.findByText("large.gcode");
+  if (screen.queryByRole("button", { name: "Open filter rail" })) fireEvent.click(screen.getByRole("button", { name: "Open filter rail" }));
+  fireEvent.click(screen.getByRole("button", { name: "Print requirements" }));
   fireEvent.change(screen.getByLabelText(/maximum filament (weight|consumption)/i), {
     target: { value: "20" },
   });

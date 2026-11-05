@@ -9,6 +9,7 @@ import { loadRuntimeConfig } from "./runtime-config";
 import { BootstrapStateCacheContext, RuntimeConfigContext } from "./runtime-config-gate";
 import { Badge, Button, Card, FormField, ReasonList, StatusPill, Stepper } from "./ui";
 import { useJobImport } from "./use-job-import";
+import { QueueFilters } from "./queue-filters";
 
 
 function formatEstimatedDuration(seconds: number) {
@@ -115,21 +116,9 @@ function AppContent() {
   const [editingJob, setEditingJob] = useState<Job | null>(null);
   const [detailJob, setDetailJob] = useState<Job | null>(null);
   const [detailError, setDetailError] = useState<string | null>(null);
-  const [materialFilterInput, setMaterialFilterInput] = useState("");
+  const [detailSelection, setDetailSelection] = useState<{ jobId: string; section: string } | null>(null);
+  const detailRequest = useRef(0);
   const [materialFilter, setMaterialFilter] = useState("");
-  const [durationFilter, setDurationFilter] = useState("");
-  const [priorityFilter, setPriorityFilter] = useState("");
-  const [diagnosticFilter, setDiagnosticFilter] = useState("");
-  const [maxFilamentWeightFilter, setMaxFilamentWeightFilter] = useState("");
-  const [nozzleDiameterFilter, setNozzleDiameterFilter] = useState("");
-  const [maxDimensionXFilter, setMaxDimensionXFilter] = useState("");
-  const [maxDimensionYFilter, setMaxDimensionYFilter] = useState("");
-  const [maxDimensionZFilter, setMaxDimensionZFilter] = useState("");
-  const [slicerFilter, setSlicerFilter] = useState("");
-  const [dueBeforeFilter, setDueBeforeFilter] = useState("");
-  const [tagFilter, setTagFilter] = useState("");
-  const [assignmentModeFilter, setAssignmentModeFilter] = useState("");
-  const [provenanceParserFilter, setProvenanceParserFilter] = useState("");
   const editingSession = useRef(0);
   const [schedulingError, setSchedulingError] = useState<string | null>(null);
   const { register, reset, getValues, watch } = useForm<SchedulingFormValues>({
@@ -229,14 +218,45 @@ function AppContent() {
     await create(artifact.id, planningValues);
   }
 
-  async function handleJobDetails(jobId: string) {
+  async function handleJobDetails(jobId: string, section: string) {
+    const request = ++detailRequest.current;
+    setDetailSelection({ jobId, section });
+    setDetailJob(null);
+    setDetailError(null);
     try {
-      setDetailError(null);
-      setDetailJob(await fetchJob(apiBaseUrl!, jobId));
+      const job = await fetchJob(apiBaseUrl!, jobId);
+      if (detailRequest.current === request) setDetailJob(job);
     } catch {
-      setDetailJob(null);
-      setDetailError("Unable to fetch job details");
+      if (detailRequest.current === request) setDetailError("Unable to fetch job details");
     }
+  }
+
+  function renderJobDetails(jobId: string, section: string) {
+    if (detailSelection?.jobId !== jobId || detailSelection.section !== section) return null;
+    return (
+      <Card aria-label="Job details" className="mt-3 bg-slate-50">
+        <div className="flex items-center justify-between gap-4">
+          <h3 className="text-base font-bold text-slate-900">Job details</h3>
+          <button type="button" aria-label="Close details" className="rounded-md p-1 text-slate-500 hover:bg-slate-200 hover:text-slate-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-400" onClick={() => {
+            detailRequest.current++;
+            setDetailSelection(null);
+            setDetailJob(null);
+            setDetailError(null);
+          }}>
+            <svg aria-hidden="true" className="h-5 w-5" viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
+              <path d="M5 5l10 10M15 5L5 15" />
+            </svg>
+          </button>
+        </div>
+        {detailError ? <p role="alert">{detailError}</p> : detailJob ? (
+          <dl className="mt-4 grid gap-3 text-sm sm:grid-cols-3">
+            <div><dt className="text-slate-500">File</dt><dd className="mt-1 break-all font-medium text-slate-900">{jobFilename(detailJob.executionData, artifact)}</dd></div>
+            <div><dt className="text-slate-500">Status</dt><dd className="mt-1 font-medium text-slate-900">{detailJob.state}</dd></div>
+            {typeof detailJob.executionData.material === "string" && <div><dt className="text-slate-500">Material</dt><dd className="mt-1 font-medium text-slate-900">{detailJob.executionData.material}</dd></div>}
+          </dl>
+        ) : <p role="status">Loading job details…</p>}
+      </Card>
+    );
   }
 
   async function handleSaveScheduling(job: (typeof jobs)[number]) {
@@ -289,60 +309,7 @@ function AppContent() {
         {cockpitError && <p role="alert">Unable to load cockpit</p>}
         <Card aria-labelledby="active-queue-heading" className="lg:col-span-2">
           <h2 id="active-queue-heading">Active queue</h2>
-          <FormField label="Filter by material">
-            <input value={materialFilterInput} onChange={(event) => setMaterialFilterInput(event.target.value)} />
-          </FormField>
-          <FormField label="Minimum duration (seconds)">
-            <input type="number" value={durationFilter} onChange={(event) => setDurationFilter(event.target.value)} />
-          </FormField>
-          <FormField label="Minimum priority">
-            <input type="number" value={priorityFilter} onChange={(event) => setPriorityFilter(event.target.value)} />
-          </FormField>
-          <FormField label="Diagnostic code">
-            <input value={diagnosticFilter} onChange={(event) => setDiagnosticFilter(event.target.value)} />
-          </FormField>
-          <FormField label="Maximum filament weight (grams)">
-            <input type="number" value={maxFilamentWeightFilter} onChange={(event) => setMaxFilamentWeightFilter(event.target.value)} />
-          </FormField>
-          <FormField label="Nozzle diameter (mm)">
-            <input type="number" step="any" value={nozzleDiameterFilter} onChange={(event) => setNozzleDiameterFilter(event.target.value)} />
-          </FormField>
-          <FormField label="Maximum X dimension (mm)">
-            <input type="number" step="any" value={maxDimensionXFilter} onChange={(event) => setMaxDimensionXFilter(event.target.value)} />
-          </FormField>
-          <FormField label="Maximum Y dimension (mm)">
-            <input type="number" step="any" value={maxDimensionYFilter} onChange={(event) => setMaxDimensionYFilter(event.target.value)} />
-          </FormField>
-          <FormField label="Maximum Z dimension (mm)">
-            <input type="number" step="any" value={maxDimensionZFilter} onChange={(event) => setMaxDimensionZFilter(event.target.value)} />
-          </FormField>
-          <FormField label="Slicer">
-            <input value={slicerFilter} onChange={(event) => setSlicerFilter(event.target.value)} />
-          </FormField>
-          <FormField label="Due before">
-            <input type="date" value={dueBeforeFilter} onChange={(event) => setDueBeforeFilter(event.target.value)} />
-          </FormField>
-          <FormField label="Filter by tag">
-            <input value={tagFilter} onChange={(event) => setTagFilter(event.target.value)} />
-          </FormField>
-          <FormField label="Filter by printer assignment">
-            <select value={assignmentModeFilter} onChange={(event) => setAssignmentModeFilter(event.target.value)}>
-              <option value="">Any</option>
-              <option value="unassigned">Unassigned</option>
-              <option value="preferred">Preferred</option>
-              <option value="required">Required</option>
-            </select>
-          </FormField>
-          <FormField label="Provenance parser">
-            <input value={provenanceParserFilter} onChange={(event) => setProvenanceParserFilter(event.target.value)} />
-          </FormField>
-          <Button type="button" onClick={() => {
-            const params = new URLSearchParams();
-            for (const [key, value] of Object.entries({ material: materialFilterInput, minDurationSeconds: durationFilter, minPriority: priorityFilter, diagnosticCode: diagnosticFilter, maxFilamentWeightGrams: maxFilamentWeightFilter, nozzleDiameter: nozzleDiameterFilter, maxDimensionX: maxDimensionXFilter, maxDimensionY: maxDimensionYFilter, maxDimensionZ: maxDimensionZFilter, slicer: slicerFilter, dueBefore: dueBeforeFilter, tag: tagFilter, assignmentMode: assignmentModeFilter, provenanceParser: provenanceParserFilter })) {
-              if (value.trim()) params.set(key, value.trim());
-            }
-            setMaterialFilter(params.toString());
-          }}>Apply filters</Button>
+          <QueueFilters applied={materialFilter} onApply={setMaterialFilter} />
           <p className="mt-1 text-sm text-slate-500">The queue is the scheduler's projection of active jobs.</p>
           <div className="mt-4 grid gap-2">
             {activeJobs.map((job) => (
@@ -357,7 +324,8 @@ function AppContent() {
                 {job.schedulingData.printerAssignment && (
                   <p>Printer: {job.schedulingData.printerAssignment.mode} {job.schedulingData.printerAssignment.printerId}</p>
                 )}
-                <Button type="button" onClick={() => void handleJobDetails(job.id)}>Details</Button>
+                <Button type="button" onClick={() => void handleJobDetails(job.id, "active")}>Details</Button>
+                {renderJobDetails(job.id, "active")}
                 {job.state === "ready" && (
                   editingJob?.id === job.id ? (
                     <div className="mt-3 flex items-end gap-3">
@@ -520,7 +488,8 @@ function AppContent() {
           {cockpit?.failures.map((job) => (
             <div key={job.id}>
               <p>{jobFilename(job.executionData, artifact)}</p>
-              <Button type="button" onClick={() => void handleJobDetails(job.id)}>Details</Button>
+              <Button type="button" onClick={() => void handleJobDetails(job.id, "failures")}>Details</Button>
+              {renderJobDetails(job.id, "failures")}
             </div>
           ))}
         </Card>
@@ -529,19 +498,11 @@ function AppContent() {
           {cockpit?.recentHistory.map((job) => (
             <div key={job.id}>
               <p>{jobFilename(job.executionData, artifact)} — {job.state}</p>
-              <Button type="button" onClick={() => void handleJobDetails(job.id)}>Details</Button>
+              <Button type="button" onClick={() => void handleJobDetails(job.id, "history")}>Details</Button>
+              {renderJobDetails(job.id, "history")}
             </div>
           ))}
         </Card>
-        {detailError && <p role="alert">{detailError}</p>}
-        {detailJob && (
-          <Card aria-label="Job details">
-            <h2>Job details</h2>
-            <p>{jobFilename(detailJob.executionData, artifact)}</p>
-            <p>{detailJob.state}</p>
-            {typeof detailJob.executionData.material === "string" && <p>{detailJob.executionData.material}</p>}
-          </Card>
-        )}
       </div>
     </main>
   );

@@ -33,6 +33,7 @@ it("lets an operator slice the cockpit by tag", async () => {
 
   render(<App />);
   await screen.findByText("other.gcode");
+  if (screen.queryByRole("button", { name: "Open filter rail" })) fireEvent.click(screen.getByRole("button", { name: "Open filter rail" }));
   fireEvent.change(screen.getByLabelText(/filter.*tag|tag.*filter/i), { target: { value: "urgent" } });
   fireEvent.click(screen.getByRole("button", { name: /apply filters/i }));
 

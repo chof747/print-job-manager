@@ -36,6 +36,7 @@ it("lets an operator show only jobs without a printer assignment", async () => {
 
   render(<App />);
   await screen.findByText("assigned.gcode");
+  if (screen.queryByRole("button", { name: "Open filter rail" })) fireEvent.click(screen.getByRole("button", { name: "Open filter rail" }));
   const filter = screen.getByLabelText(/filter.*assignment|assignment.*filter/i);
   fireEvent.change(filter, { target: { value: "unassigned" } });
   fireEvent.click(screen.getByRole("button", { name: /apply filters/i }));
@@ -70,6 +71,7 @@ it("lets an operator slice the cockpit by printer assignment mode", async () => 
 
   render(<App />);
   await screen.findByText("other.gcode");
+  if (screen.queryByRole("button", { name: "Open filter rail" })) fireEvent.click(screen.getByRole("button", { name: "Open filter rail" }));
   fireEvent.change(screen.getByLabelText(/filter.*assignment|assignment.*filter/i), { target: { value: "required" } });
   fireEvent.click(screen.getByRole("button", { name: /apply filters/i }));
 

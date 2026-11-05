@@ -35,6 +35,7 @@ it("removes a job from the priority slice after its scheduling edit no longer ma
 
   render(<App />);
   await screen.findByText("bracket.gcode");
+  if (screen.queryByRole("button", { name: "Open filter rail" })) fireEvent.click(screen.getByRole("button", { name: "Open filter rail" }));
   fireEvent.change(screen.getByLabelText(/minimum priority/i), { target: { value: "5" } });
   fireEvent.click(screen.getByRole("button", { name: /apply filters/i }));
   const active = screen.getByRole("region", { name: /active/i });

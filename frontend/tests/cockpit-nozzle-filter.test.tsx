@@ -33,6 +33,8 @@ it("lets an operator slice the cockpit by nozzle diameter", async () => {
 
   render(<App />);
   await screen.findByText("other.gcode");
+  if (screen.queryByRole("button", { name: "Open filter rail" })) fireEvent.click(screen.getByRole("button", { name: "Open filter rail" }));
+  fireEvent.click(screen.getByRole("button", { name: "Print requirements" }));
   fireEvent.change(screen.getByLabelText(/nozzle diameter/i), { target: { value: "0.4" } });
   fireEvent.click(screen.getByRole("button", { name: /apply filters/i }));
 

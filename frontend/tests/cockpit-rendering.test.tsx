@@ -135,6 +135,8 @@ it("opens a historical job's details from its cockpit summary", async () => {
   fireEvent.click(within(history).getByRole("button", { name: /details/i }));
 
   const details = await screen.findByRole("region", { name: /job details/i });
+  expect(history).toContainElement(details);
+  await within(details).findByText("PETG");
   expect(details).toHaveTextContent("finished.gcode");
   expect(details).toHaveTextContent("PETG");
   expect(details).toHaveTextContent(/completed/i);
@@ -201,9 +203,13 @@ it("opens an active job's details from the cockpit", async () => {
   fireEvent.click(within(queue).getByRole("button", { name: /details/i }));
 
   const details = await screen.findByRole("region", { name: /job details/i });
+  expect(queue).toContainElement(details);
+  await within(details).findByText("PLA");
   expect(details).toHaveTextContent("active.gcode");
   expect(details).toHaveTextContent("PLA");
   expect(details).toHaveTextContent(/ready/i);
+  fireEvent.click(within(details).getByRole("button", { name: /close/i }));
+  expect(screen.queryByRole("region", { name: /job details/i })).not.toBeInTheDocument();
 });
 
 it("renders active jobs from the cockpit projection", async () => {
@@ -327,6 +333,7 @@ it("does not show a newly created job that does not match the active material fi
   try {
     render(<App />);
     await screen.findByText(/no active jobs yet/i);
+    if (screen.queryByRole("button", { name: "Open filter rail" })) fireEvent.click(screen.getByRole("button", { name: "Open filter rail" }));
     fireEvent.change(screen.getByLabelText(/filter.*material|material.*filter/i), { target: { value: "PLA" } });
     fireEvent.click(screen.getByRole("button", { name: /apply filters/i }));
     await screen.findByText(/no active jobs yet/i);
@@ -368,6 +375,7 @@ it("lets an operator filter cockpit jobs by material", async () => {
 
   render(<App />);
   await screen.findByText("PETG.gcode");
+  if (screen.queryByRole("button", { name: "Open filter rail" })) fireEvent.click(screen.getByRole("button", { name: "Open filter rail" }));
   fireEvent.change(screen.getByLabelText(/filter.*material|material.*filter/i), { target: { value: "PLA" } });
   fireEvent.click(screen.getByRole("button", { name: /apply filters/i }));
 
@@ -407,8 +415,12 @@ it("lets an operator combine print, scheduling and parser-quality filters", asyn
 
   render(<App />);
   await screen.findByText("other.gcode");
+  if (screen.queryByRole("button", { name: "Open filter rail" })) fireEvent.click(screen.getByRole("button", { name: "Open filter rail" }));
   fireEvent.change(screen.getByLabelText(/minimum duration/i), { target: { value: "1800" } });
+  if (screen.queryByRole("button", { name: "Open filter rail" })) fireEvent.click(screen.getByRole("button", { name: "Open filter rail" }));
   fireEvent.change(screen.getByLabelText(/minimum priority/i), { target: { value: "5" } });
+  if (screen.queryByRole("button", { name: "Open filter rail" })) fireEvent.click(screen.getByRole("button", { name: "Open filter rail" }));
+  fireEvent.click(screen.getByRole("button", { name: "Source & diagnostics" }));
   fireEvent.change(screen.getByLabelText(/diagnostic code/i), { target: { value: "malformed_metadata" } });
   fireEvent.click(screen.getByRole("button", { name: /apply filters/i }));
 
@@ -448,6 +460,8 @@ it("opens details for a failure even when it is absent from recent history", asy
   fireEvent.click(within(failures).getByRole("button", { name: /details/i }));
 
   const details = await screen.findByRole("region", { name: /job details/i });
+  expect(failures).toContainElement(details);
+  await within(details).findByText("PETG");
   expect(details).toHaveTextContent("failed.gcode");
   expect(details).toHaveTextContent("PETG");
   expect(details).toHaveTextContent(/failed/i);

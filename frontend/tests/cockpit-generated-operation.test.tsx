@@ -46,7 +46,9 @@ it("uses the generated cockpit operation when an operator applies planning filte
 
   render(<App />);
   await screen.findByText(/no active jobs yet/i);
+  if (screen.queryByRole("button", { name: "Open filter rail" })) fireEvent.click(screen.getByRole("button", { name: "Open filter rail" }));
   fireEvent.change(screen.getByLabelText(/filter by material/i), { target: { value: "PLA" } });
+  if (screen.queryByRole("button", { name: "Open filter rail" })) fireEvent.click(screen.getByRole("button", { name: "Open filter rail" }));
   fireEvent.change(screen.getByLabelText(/minimum priority/i), { target: { value: "5" } });
   fireEvent.click(screen.getByRole("button", { name: /apply filters/i }));
 

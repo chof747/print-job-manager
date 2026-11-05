@@ -33,6 +33,8 @@ it("lets an operator slice the cockpit by maximum Z dimension", async () => {
 
   render(<App />);
   await screen.findByText("other.gcode");
+  if (screen.queryByRole("button", { name: "Open filter rail" })) fireEvent.click(screen.getByRole("button", { name: "Open filter rail" }));
+  fireEvent.click(screen.getByRole("button", { name: "Print requirements" }));
   fireEvent.change(screen.getByLabelText(/maximum.*(?:z.*dimension|dimension.*z)/i), {
     target: { value: "40" },
   });
