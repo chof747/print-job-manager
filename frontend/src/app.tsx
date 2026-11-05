@@ -4,10 +4,12 @@ import { useForm } from "react-hook-form";
 
 import { fetchBackendConfig, fetchBackendHealth } from "./backend-health";
 import type { Job } from "./job-import-api-client";
+import { fetchJob } from "./job-import-api-client";
 import { loadRuntimeConfig } from "./runtime-config";
 import { BootstrapStateCacheContext, RuntimeConfigContext } from "./runtime-config-gate";
 import { Badge, Button, Card, FormField, ReasonList, StatusPill, Stepper } from "./ui";
 import { useJobImport } from "./use-job-import";
+import { QueueFilters } from "./queue-filters";
 
 
 function formatEstimatedDuration(seconds: number) {
@@ -112,13 +114,18 @@ function AppContent() {
   const [importError, setImportError] = useState<string | null>(null);
   const [planningValues, setPlanningValues] = useState<Record<string, string>>({});
   const [editingJob, setEditingJob] = useState<Job | null>(null);
+  const [detailJob, setDetailJob] = useState<Job | null>(null);
+  const [detailError, setDetailError] = useState<string | null>(null);
+  const [detailSelection, setDetailSelection] = useState<{ jobId: string; section: string } | null>(null);
+  const detailRequest = useRef(0);
+  const [materialFilter, setMaterialFilter] = useState("");
   const editingSession = useRef(0);
   const [schedulingError, setSchedulingError] = useState<string | null>(null);
   const { register, reset, getValues, watch } = useForm<SchedulingFormValues>({
     defaultValues: { priority: "", dueDate: "", notes: "", tags: "", assignmentMode: "", printerId: "" },
   });
   const assignmentMode = watch("assignmentMode");
-  const { artifact, extractedMetadata, provenance, diagnostics, missingPlanningValues, jobs, createError, isCreated, isImporting, importFile, create, updateScheduling } = useJobImport(apiBaseUrl);
+  const { artifact, extractedMetadata, provenance, diagnostics, missingPlanningValues, jobs, cockpit, cockpitError, createError, isCreated, isImporting, importFile, create, updateScheduling } = useJobImport(apiBaseUrl, materialFilter);
 
   useEffect(() => {
     let isActive = true;
@@ -211,6 +218,47 @@ function AppContent() {
     await create(artifact.id, planningValues);
   }
 
+  async function handleJobDetails(jobId: string, section: string) {
+    const request = ++detailRequest.current;
+    setDetailSelection({ jobId, section });
+    setDetailJob(null);
+    setDetailError(null);
+    try {
+      const job = await fetchJob(apiBaseUrl!, jobId);
+      if (detailRequest.current === request) setDetailJob(job);
+    } catch {
+      if (detailRequest.current === request) setDetailError("Unable to fetch job details");
+    }
+  }
+
+  function renderJobDetails(jobId: string, section: string) {
+    if (detailSelection?.jobId !== jobId || detailSelection.section !== section) return null;
+    return (
+      <Card aria-label="Job details" className="mt-3 bg-slate-50">
+        <div className="flex items-center justify-between gap-4">
+          <h3 className="text-base font-bold text-slate-900">Job details</h3>
+          <button type="button" aria-label="Close details" className="rounded-md p-1 text-slate-500 hover:bg-slate-200 hover:text-slate-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-400" onClick={() => {
+            detailRequest.current++;
+            setDetailSelection(null);
+            setDetailJob(null);
+            setDetailError(null);
+          }}>
+            <svg aria-hidden="true" className="h-5 w-5" viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
+              <path d="M5 5l10 10M15 5L5 15" />
+            </svg>
+          </button>
+        </div>
+        {detailError ? <p role="alert">{detailError}</p> : detailJob ? (
+          <dl className="mt-4 grid gap-3 text-sm sm:grid-cols-3">
+            <div><dt className="text-slate-500">File</dt><dd className="mt-1 break-all font-medium text-slate-900">{jobFilename(detailJob.executionData, artifact)}</dd></div>
+            <div><dt className="text-slate-500">Status</dt><dd className="mt-1 font-medium text-slate-900">{detailJob.state}</dd></div>
+            {typeof detailJob.executionData.material === "string" && <div><dt className="text-slate-500">Material</dt><dd className="mt-1 font-medium text-slate-900">{detailJob.executionData.material}</dd></div>}
+          </dl>
+        ) : <p role="status">Loading job details…</p>}
+      </Card>
+    );
+  }
+
   async function handleSaveScheduling(job: (typeof jobs)[number]) {
     const session = editingSession.current;
     const { priority, dueDate, notes, tags, assignmentMode, printerId } = getValues();
@@ -241,6 +289,10 @@ function AppContent() {
 
   const formatPlanningValueLabel = (value: string) => value.replace(/([a-z])([A-Z])/g, "$1 $2");
   const hasBlankPlanningValue = missingPlanningValues.some((value) => !planningValues[value]?.trim());
+  const activeJobs = cockpit ? cockpit.activeJobs.map((job) => {
+    const queuedJob = jobs.find((item) => item.id === job.id);
+    return queuedJob && queuedJob.version > job.version ? queuedJob : job;
+  }) : materialFilter ? [] : jobs;
 
   return (
     <main aria-label="Operations" className="min-h-screen bg-slate-50 text-slate-900">
@@ -254,6 +306,98 @@ function AppContent() {
         </div>
       </header>
       <div className="mx-auto grid max-w-7xl grid-cols-1 gap-5 p-4 md:p-6 lg:grid-cols-[minmax(0,1fr)_300px]">
+        {cockpitError && <p role="alert">Unable to load cockpit</p>}
+        <Card aria-labelledby="active-queue-heading" className="lg:col-span-2">
+          <h2 id="active-queue-heading">Active queue</h2>
+          <QueueFilters applied={materialFilter} onApply={setMaterialFilter} />
+          <p className="mt-1 text-sm text-slate-500">The queue is the scheduler's projection of active jobs.</p>
+          <div className="mt-4 grid gap-2">
+            {activeJobs.map((job) => (
+              <div key={job.id} className="rounded-xl border border-slate-200 px-4 py-3">
+                <div className="flex items-center justify-between gap-4">
+                  <strong>{jobFilename(job.executionData, artifact)}</strong>
+                  <StatusPill tone="ready">{job.state}</StatusPill>
+                </div>
+                <p className="mt-1 text-sm text-slate-500">Priority: {job.schedulingData.priority}</p>
+                {job.schedulingData.dueDate && <p>Due date: {job.schedulingData.dueDate}</p>}
+                {typeof job.executionData.material === "string" && <p>Material: {job.executionData.material}</p>}
+                {job.schedulingData.printerAssignment && (
+                  <p>Printer: {job.schedulingData.printerAssignment.mode} {job.schedulingData.printerAssignment.printerId}</p>
+                )}
+                <Button type="button" onClick={() => void handleJobDetails(job.id, "active")}>Details</Button>
+                {renderJobDetails(job.id, "active")}
+                {job.state === "ready" && (
+                  editingJob?.id === job.id ? (
+                    <div className="mt-3 flex items-end gap-3">
+                      <FormField label="Priority">
+                        <input
+                          type="number"
+                          className="rounded-xl border border-slate-300 bg-white px-3 py-2 text-slate-900 shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-400"
+                          {...register("priority")}
+                        />
+                      </FormField>
+                      <FormField label="Due date">
+                        <input
+                          type="date"
+                          className="rounded-xl border border-slate-300 bg-white px-3 py-2 text-slate-900 shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-400"
+                          {...register("dueDate")}
+                        />
+                      </FormField>
+                      <FormField label="Notes">
+                        <textarea
+                          className="rounded-xl border border-slate-300 bg-white px-3 py-2 text-slate-900 shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-400"
+                          {...register("notes")}
+                        />
+                      </FormField>
+                      <FormField label="Tags">
+                        <input
+                          className="rounded-xl border border-slate-300 bg-white px-3 py-2 text-slate-900 shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-400"
+                          {...register("tags")}
+                        />
+                      </FormField>
+                      <FormField label="Assignment mode">
+                        <select {...register("assignmentMode")}>
+                          <option value="">None</option>
+                          <option value="preferred">Preferred</option>
+                          <option value="required">Required</option>
+                        </select>
+                      </FormField>
+                      {assignmentMode !== "" && (
+                        <FormField label="Printer ID">
+                          <input {...register("printerId")} />
+                        </FormField>
+                      )}
+                      {schedulingError && <p role="alert">{schedulingError}</p>}
+                      <Button type="button" onClick={() => void handleSaveScheduling(editingJob)}>Save scheduling</Button>
+                    </div>
+                  ) : (
+                    <Button
+                      type="button"
+                      variant="secondary"
+                      className="mt-3"
+                      onClick={() => {
+                        editingSession.current++;
+                        setEditingJob(job);
+                        setSchedulingError(null);
+                        reset({
+                          priority: String(job.schedulingData.priority),
+                          dueDate: job.schedulingData.dueDate ?? "",
+                          notes: job.schedulingData.notes ?? "",
+                          tags: formatTags(job.schedulingData.tags ?? []),
+                          assignmentMode: job.schedulingData.printerAssignment?.mode ?? "",
+                          printerId: job.schedulingData.printerAssignment?.printerId ?? "",
+                        });
+                      }}
+                    >
+                      Edit scheduling
+                    </Button>
+                  )
+                )}
+              </div>
+            ))}
+            {!activeJobs.length && <p className="rounded-xl bg-slate-50 px-4 py-3 text-sm text-slate-500">No active jobs yet.</p>}
+          </div>
+        </Card>
         <Card aria-labelledby="guided-import-heading" className="border-indigo-200 bg-gradient-to-br from-indigo-50 to-white">
           <div className="mb-5 flex items-start justify-between gap-4">
             <div>
@@ -339,88 +483,25 @@ function AppContent() {
             <div className="flex items-center justify-between gap-3"><dt className="text-slate-500">Backend status</dt><dd><StatusPill tone={status === "ok" ? "ready" : "attention"}>{status}</StatusPill></dd></div>
           </dl>
         </Card>
-        <Card aria-labelledby="active-queue-heading" className="lg:col-span-2">
-          <h2 id="active-queue-heading">Active queue</h2>
-          <p className="mt-1 text-sm text-slate-500">The queue is the scheduler's projection of active jobs.</p>
-          <div className="mt-4 grid gap-2">
-            {jobs.map((job) => (
-              <div key={job.id} className="rounded-xl border border-slate-200 px-4 py-3">
-                <div className="flex items-center justify-between gap-4">
-                  <strong>{jobFilename(job.executionData, artifact)}</strong>
-                  <StatusPill tone="ready">{job.state}</StatusPill>
-                </div>
-                <p className="mt-1 text-sm text-slate-500">Priority: {job.schedulingData.priority}</p>
-                {job.state === "ready" && (
-                  editingJob?.id === job.id ? (
-                    <div className="mt-3 flex items-end gap-3">
-                      <FormField label="Priority">
-                        <input
-                          type="number"
-                          className="rounded-xl border border-slate-300 bg-white px-3 py-2 text-slate-900 shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-400"
-                          {...register("priority")}
-                        />
-                      </FormField>
-                      <FormField label="Due date">
-                        <input
-                          type="date"
-                          className="rounded-xl border border-slate-300 bg-white px-3 py-2 text-slate-900 shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-400"
-                          {...register("dueDate")}
-                        />
-                      </FormField>
-                      <FormField label="Notes">
-                        <textarea
-                          className="rounded-xl border border-slate-300 bg-white px-3 py-2 text-slate-900 shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-400"
-                          {...register("notes")}
-                        />
-                      </FormField>
-                      <FormField label="Tags">
-                        <input
-                          className="rounded-xl border border-slate-300 bg-white px-3 py-2 text-slate-900 shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-400"
-                          {...register("tags")}
-                        />
-                      </FormField>
-                      <FormField label="Assignment mode">
-                        <select {...register("assignmentMode")}>
-                          <option value="">None</option>
-                          <option value="preferred">Preferred</option>
-                          <option value="required">Required</option>
-                        </select>
-                      </FormField>
-                      {assignmentMode !== "" && (
-                        <FormField label="Printer ID">
-                          <input {...register("printerId")} />
-                        </FormField>
-                      )}
-                      {schedulingError && <p role="alert">{schedulingError}</p>}
-                      <Button type="button" onClick={() => void handleSaveScheduling(editingJob)}>Save scheduling</Button>
-                    </div>
-                  ) : (
-                    <Button
-                      type="button"
-                      variant="secondary"
-                      className="mt-3"
-                      onClick={() => {
-                        editingSession.current++;
-                        setEditingJob(job);
-                        setSchedulingError(null);
-                        reset({
-                          priority: String(job.schedulingData.priority),
-                          dueDate: job.schedulingData.dueDate ?? "",
-                          notes: job.schedulingData.notes ?? "",
-                          tags: formatTags(job.schedulingData.tags ?? []),
-                          assignmentMode: job.schedulingData.printerAssignment?.mode ?? "",
-                          printerId: job.schedulingData.printerAssignment?.printerId ?? "",
-                        });
-                      }}
-                    >
-                      Edit scheduling
-                    </Button>
-                  )
-                )}
-              </div>
-            ))}
-            {!jobs.length && <p className="rounded-xl bg-slate-50 px-4 py-3 text-sm text-slate-500">No active jobs yet.</p>}
-          </div>
+        <Card aria-label="Failures">
+          <h2>Failures</h2>
+          {cockpit?.failures.map((job) => (
+            <div key={job.id}>
+              <p>{jobFilename(job.executionData, artifact)}</p>
+              <Button type="button" onClick={() => void handleJobDetails(job.id, "failures")}>Details</Button>
+              {renderJobDetails(job.id, "failures")}
+            </div>
+          ))}
+        </Card>
+        <Card aria-label="Recent history">
+          <h2>Recent history</h2>
+          {cockpit?.recentHistory.map((job) => (
+            <div key={job.id}>
+              <p>{jobFilename(job.executionData, artifact)} — {job.state}</p>
+              <Button type="button" onClick={() => void handleJobDetails(job.id, "history")}>Details</Button>
+              {renderJobDetails(job.id, "history")}
+            </div>
+          ))}
         </Card>
       </div>
     </main>

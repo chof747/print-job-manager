@@ -16,7 +16,7 @@ const job = {
 
 
 function jsonResponse(body: unknown, status = 200) {
-  return { ok: status >= 200 && status < 300, status, json: async () => body };
+  return { ok: status >= 200 && status < 300, status, headers: { get: () => "application/json" }, json: async () => body };
 }
 
 
@@ -68,6 +68,10 @@ it("gives upload, create success, create failure, and queue refresh failure dist
 
     if (url === `${apiBaseUrl}/queue`) {
       return Promise.resolve(createCount === 3 ? jsonResponse({}, 500) : jsonResponse({ jobs: [job] }));
+    }
+
+    if (url === `${apiBaseUrl}/cockpit`) {
+      return Promise.resolve(jsonResponse({ activeJobs: [job], failures: [], recentHistory: [] }));
     }
 
     throw new Error(`Unexpected fetch: ${url}`);

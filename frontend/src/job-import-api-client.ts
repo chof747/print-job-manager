@@ -23,6 +23,41 @@ export type Queue = {
   jobs: Job[];
 };
 
+export type Cockpit = {
+  activeJobs: Job[];
+  failures: Job[];
+  recentHistory: Job[];
+};
+
+export async function fetchCockpit(apiBaseUrl: string, filters = ""): Promise<Cockpit> {
+  const params = new URLSearchParams(filters);
+  const text = (key: string) => params.get(key) ?? undefined;
+  const number = (key: string) => params.has(key) ? Number(params.get(key)) : undefined;
+  const client = new SchedulingClient({ BASE: apiBaseUrl, ENCODE_PATH: encodeURIComponent });
+  try {
+    return await client.default.cockpitApiV1CockpitGet({
+      diagnosticCode: text("diagnosticCode"), material: text("material"),
+      minDurationSeconds: number("minDurationSeconds"), minPriority: number("minPriority"),
+      dueBefore: text("dueBefore"), tag: text("tag"), assignmentMode: text("assignmentMode"),
+      maxFilamentWeightGrams: number("maxFilamentWeightGrams"), nozzleDiameter: number("nozzleDiameter"),
+      maxDimensionX: number("maxDimensionX"), maxDimensionY: number("maxDimensionY"),
+      maxDimensionZ: number("maxDimensionZ"), slicer: text("slicer"),
+      provenanceParser: text("provenanceParser"),
+    });
+  } catch {
+    throw new Error("Unable to fetch cockpit");
+  }
+}
+
+export async function fetchJob(apiBaseUrl: string, jobId: string): Promise<Job> {
+  const client = new SchedulingClient({ BASE: apiBaseUrl, ENCODE_PATH: encodeURIComponent });
+  try {
+    return await client.default.jobDetailApiV1JobsJobIdGet({ jobId });
+  } catch {
+    throw new Error("Unable to fetch job details");
+  }
+}
+
 export type CreateJobError = Error & {
   detail?: unknown;
 };

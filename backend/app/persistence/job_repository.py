@@ -1,7 +1,7 @@
 from copy import deepcopy
 from datetime import date
 
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.orm import selectinload
 
 from .database import SessionFactory
@@ -89,6 +89,27 @@ class SqlAlchemyJobRepository:
                 .order_by(JobRecord.queue_position)
             )
             return {"jobs": [self._as_job(record) for record in records]}
+
+    def cockpit_jobs(self) -> list[dict[str, object]]:
+        with SessionFactory() as session:
+            terminal_time = (
+                select(func.max(JobHistoryRecord.created_at))
+                .where(
+                    JobHistoryRecord.job_id == JobRecord.id,
+                    JobHistoryRecord.state.in_(("failed", "completed", "cancelled", "archived")),
+                )
+                .scalar_subquery()
+            )
+            records = session.scalars(
+                select(JobRecord)
+                .options(
+                    selectinload(JobRecord.scheduling).selectinload(
+                        JobSchedulingRecord.tags
+                    )
+                )
+                .order_by(terminal_time.desc().nullslast(), JobRecord.queue_position)
+            )
+            return [self._as_job(record) for record in records]
 
     def get_job(self, job_id: str) -> dict[str, object] | None:
         with SessionFactory() as session:

@@ -8,8 +8,8 @@ from pathlib import Path
 from backend.app.main import app
 
 schema = app.openapi()
-path = "/api/v1/jobs/{job_id}/scheduling"
-schema["paths"] = {path.removeprefix("/api/v1"): schema["paths"][path]}
+paths = ("/api/v1/jobs/{job_id}/scheduling", "/api/v1/cockpit", "/api/v1/jobs/{job_id}")
+schema["paths"] = {path.removeprefix("/api/v1"): schema["paths"][path] for path in paths}
 schemas = schema["components"]["schemas"]
 referenced = set()
 

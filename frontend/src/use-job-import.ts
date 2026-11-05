@@ -4,16 +4,18 @@ import { useRef, useState } from "react";
 import type { UpdateSchedulingRequest } from "./generated/scheduling/models/UpdateSchedulingRequest";
 import {
   createJob,
+  fetchCockpit,
   fetchImportReview,
   fetchQueue,
   importGcode,
+  type Cockpit,
   type ImportedArtifact,
   type Job,
   type PlanningValues,
 } from "./job-import-api-client";
 import { useJobScheduling } from "./use-job-scheduling";
 
-export function useJobImport(apiBaseUrl: string | null) {
+export function useJobImport(apiBaseUrl: string | null, materialFilter = "") {
   const [artifact, setArtifact] = useState<ImportedArtifact | null>(null);
   const [importId, setImportId] = useState<string | null>(null);
   const [extractedMetadata, setExtractedMetadata] = useState<Record<string, string | number>>({});
@@ -22,6 +24,13 @@ export function useJobImport(apiBaseUrl: string | null) {
   const [missingPlanningValues, setMissingPlanningValues] = useState<string[]>([]);
   const queryClient = useQueryClient();
   const queueKey = ["active-queue", apiBaseUrl];
+  const cockpitKey = ["cockpit", apiBaseUrl, materialFilter];
+  const { data: cockpit, isError: cockpitError } = useQuery({
+    queryKey: cockpitKey,
+    queryFn: () => fetchCockpit(apiBaseUrl!, materialFilter),
+    enabled: apiBaseUrl !== null,
+    retry: false,
+  });
   const { data: jobs = [] } = useQuery<Job[]>({
     queryKey: queueKey,
     queryFn: async () => (await fetchQueue(apiBaseUrl!)).jobs,
@@ -74,9 +83,10 @@ export function useJobImport(apiBaseUrl: string | null) {
     let jobCreated = false;
     setIsCreated(false);
     try {
-      await createJob(apiBaseUrl, importId ?? artifactId, planningValues);
+      const createdJob = await createJob(apiBaseUrl, importId ?? artifactId, planningValues);
       jobCreated = true;
       setCreateError(null);
+      void queryClient.invalidateQueries({ queryKey: ["cockpit", apiBaseUrl] });
       const requestVersion = ++queueRequestVersion.current;
       await queryClient.cancelQueries({ queryKey: queueKey, exact: true });
       const queue = await fetchQueue(apiBaseUrl);
@@ -86,6 +96,10 @@ export function useJobImport(apiBaseUrl: string | null) {
           return currentJob && currentJob.version > queuedJob.version ? currentJob : queuedJob;
         }));
       }
+      queryClient.setQueryData<Cockpit>(cockpitKey, (current) => {
+        if (!current || materialFilter || current.activeJobs.some((job) => job.id === createdJob.id)) return current;
+        return { ...current, activeJobs: [...current.activeJobs, createdJob] };
+      });
       setIsCreated(true);
     } catch (error: unknown) {
       if (jobCreated) {
@@ -124,8 +138,9 @@ export function useJobImport(apiBaseUrl: string | null) {
     queryClient.setQueryData<Job[]>(queueKey, (currentJobs = []) => currentJobs.map((currentJob) =>
       currentJob.id === updatedJob.id && currentJob.version <= updatedJob.version ? updatedJob : currentJob,
     ));
+    void queryClient.invalidateQueries({ queryKey: ["cockpit", apiBaseUrl] });
     return updatedJob;
   }
 
-  return { artifact, extractedMetadata, provenance, diagnostics, missingPlanningValues, jobs, createError, isCreated, isImporting, importFile, create, updateScheduling };
+  return { artifact, extractedMetadata, provenance, diagnostics, missingPlanningValues, jobs, cockpit, cockpitError, createError, isCreated, isImporting, importFile, create, updateScheduling };
 }
