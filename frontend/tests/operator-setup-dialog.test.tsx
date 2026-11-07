@@ -19,3 +19,12 @@ it.each([
   expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
   expect(trigger).toHaveFocus();
 });
+
+it("shows millimeter units for printer dimensions", () => {
+  render(<OperatorSetup apiBaseUrl="/api" />);
+  fireEvent.click(screen.getByRole("button", { name: "Set up printer" }));
+  const dialog = screen.getByRole("dialog", { name: "Printer setup" });
+  for (const label of ["Nozzle diameter (mm)", "Build volume X (mm)", "Build volume Y (mm)", "Build volume Z (mm)"]) {
+    expect(within(dialog).getByLabelText(label)).toBeInTheDocument();
+  }
+});
