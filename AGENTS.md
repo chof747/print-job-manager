@@ -1,5 +1,10 @@
 # Project instructions
 
+## User interface
+
+Follow and extend the living UI guidelines in `docs/UI_GUIDELINES.md` when
+implementing or reviewing frontend changes.
+
 ## Pull requests and database migrations
 
 In every pull request description, explicitly state whether a database migration
