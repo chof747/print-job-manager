@@ -16,3 +16,20 @@ This is a temporary rule. Before the application goes live, the owner will revok
 it and establish the appropriate data-preservation requirements. It does not
 authorize deleting unrelated files or user work, or performing destructive
 operations without the required confirmation.
+
+## Agent skills
+
+### Issue tracker
+
+Issues are tracked in GitHub Issues; external PRs are not a triage surface.
+See `docs/agents/issue-tracker.md`.
+
+### Triage labels
+
+Use the repository's existing canonical triage and category labels.
+See `docs/agents/triage-labels.md`.
+
+### Domain docs
+
+Single-context: `docs/CONTEXT.md` and `docs/adr/`.
+See `docs/agents/domain.md`.
