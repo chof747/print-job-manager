@@ -33,6 +33,8 @@ class SqlAlchemyPrinterCatalog:
 
 
 class SqlAlchemyMaterialInventory:
+    """Local MVP availability source; see docs/architecture/inventory-availability.md."""
+
     def add_material(self, material_type: str, color: str, amount_grams: float) -> int:
         with database.SessionFactory.begin() as session:
             material = models.InventoryMaterialRecord(
@@ -53,6 +55,7 @@ class SqlAlchemyMaterialInventory:
             return result.scalar_one_or_none() is not None
 
     def is_available(self, material_type: str, color: str | None = None, amount_grams: float | None = None) -> bool:
+        # A single matching record must cover the requirement; quantities are not pooled.
         with database.SessionFactory() as session:
             query = select(models.InventoryMaterialRecord.id).where(
                 models.InventoryMaterialRecord.material_type == material_type,

@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import { useForm } from "react-hook-form";
 
 import { useOperatorSetup } from "./use-operator-setup";
@@ -7,9 +7,46 @@ import { Button, Card, FormField } from "./ui";
 type PrinterForm = { printerId: string; enclosure: boolean; hardenedNozzle: boolean; nozzleDiameter: string; buildVolume: { x: string; y: string; z: string } };
 type MaterialForm = { materialType: string; color: string; amount: string };
 
+const inputClass = "w-full rounded-xl border border-slate-300 bg-white px-3 py-2 text-slate-900 shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-400";
+
+function SetupDialog({ title, onClose, children }: { title: string; onClose: () => void; children: ReactNode }) {
+  const dialog = useRef<HTMLDivElement>(null);
+  const close = useRef(onClose);
+  close.current = onClose;
+
+  useEffect(() => {
+    const previous = document.activeElement as HTMLElement | null;
+    const element = dialog.current;
+    element?.querySelector<HTMLElement>("input, button")?.focus();
+    function handleKey(event: KeyboardEvent) {
+      if (event.key === "Escape") {
+        event.preventDefault();
+        close.current();
+      } else if (event.key === "Tab" && element) {
+        const focusable = Array.from(element.querySelectorAll<HTMLElement>("button:not(:disabled), input:not(:disabled), select:not(:disabled), textarea:not(:disabled)"));
+        const first = focusable[0];
+        const last = focusable[focusable.length - 1];
+        if (event.shiftKey && document.activeElement === first) { event.preventDefault(); last?.focus(); }
+        else if (!event.shiftKey && document.activeElement === last) { event.preventDefault(); first?.focus(); }
+      }
+    }
+    document.addEventListener("keydown", handleKey);
+    return () => { document.removeEventListener("keydown", handleKey); previous?.focus(); };
+  }, []);
+
+  return <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/50 p-4" onClick={(event) => { if (event.target === event.currentTarget) onClose(); }}>
+    <div ref={dialog} role="dialog" aria-modal="true" aria-label={title} className="max-h-full w-full max-w-lg overflow-y-auto rounded-2xl border border-slate-200 bg-white p-6 shadow-xl">
+      <div className="mb-5 flex items-center justify-between gap-4">
+        <h2 className="text-lg font-bold text-slate-900">{title}</h2>
+        <Button type="button" variant="secondary" onClick={onClose}>Close</Button>
+      </div>
+      {children}
+    </div>
+  </div>;
+}
+
 export function OperatorSetup({ apiBaseUrl }: { apiBaseUrl: string }) {
-  const [showPrinter, setShowPrinter] = useState(false);
-  const [showMaterial, setShowMaterial] = useState(false);
+  const [open, setOpen] = useState<"printer" | "material" | null>(null);
   const printerForm = useForm<PrinterForm>({ defaultValues: { printerId: "", enclosure: false, hardenedNozzle: false, nozzleDiameter: "", buildVolume: { x: "", y: "", z: "" } } });
   const materialForm = useForm<MaterialForm>({ defaultValues: { materialType: "", color: "", amount: "" } });
   const { printer, material } = useOperatorSetup(apiBaseUrl);
@@ -53,26 +90,30 @@ export function OperatorSetup({ apiBaseUrl }: { apiBaseUrl: string }) {
   }
 
   return <Card aria-label="Operator setup">
-    <Button type="button" onClick={() => setShowPrinter(!showPrinter)}>Set up printer</Button>
-    <Button type="button" onClick={() => setShowMaterial(!showMaterial)}>Add material</Button>
-    {showPrinter && <section aria-label="Printer setup">
-      <FormField label="Printer ID"><input {...printerForm.register("printerId")} /></FormField>
-      <label><input type="checkbox" {...printerForm.register("enclosure")} /> Enclosure</label>
-      <label><input type="checkbox" {...printerForm.register("hardenedNozzle")} /> Hardened nozzle</label>
-      <FormField label="Nozzle diameter"><input type="number" step="any" {...printerForm.register("nozzleDiameter")} /></FormField>
-      {(["x", "y", "z"] as const).map((axis) => <FormField key={axis} label={`Build volume ${axis.toUpperCase()}`}>
-        <input type="number" step="any" {...printerForm.register(`buildVolume.${axis}`)} />
-      </FormField>)}
-      <p>Saving replaces any existing capabilities for this printer.</p>
+    <div className="flex flex-wrap gap-3">
+      <Button type="button" onClick={(event) => { event.currentTarget.focus(); setOpen("printer"); }}>Set up printer</Button>
+      <Button type="button" onClick={(event) => { event.currentTarget.focus(); setOpen("material"); }}>Add material</Button>
+    </div>
+    {open === "printer" && <SetupDialog title="Printer setup" onClose={() => setOpen(null)}><section aria-label="Printer setup" className="grid gap-4">
+      <FormField label="Printer ID"><input className={inputClass} {...printerForm.register("printerId")} /></FormField>
+      <div className="flex flex-wrap gap-4 text-sm font-bold text-slate-700">
+        <label className="flex items-center gap-2"><input type="checkbox" className="h-4 w-4 accent-indigo-600" {...printerForm.register("enclosure")} /> Enclosure</label>
+        <label className="flex items-center gap-2"><input type="checkbox" className="h-4 w-4 accent-indigo-600" {...printerForm.register("hardenedNozzle")} /> Hardened nozzle</label>
+      </div>
+      <FormField label="Nozzle diameter (mm)"><input className={inputClass} type="number" step="any" {...printerForm.register("nozzleDiameter")} /></FormField>
+      <div className="grid gap-3 sm:grid-cols-3">{(["x", "y", "z"] as const).map((axis) => <FormField key={axis} label={`Build volume ${axis.toUpperCase()} (mm)`}>
+        <input className={inputClass} type="number" step="any" {...printerForm.register(`buildVolume.${axis}`)} />
+      </FormField>)}</div>
+      <p className="text-sm text-slate-500">Saving replaces any existing capabilities for this printer.</p>
       <Button type="button" onClick={() => void handleSavePrinter()}>Save printer</Button>
       {printerStatus && <p role="status">{printerStatus}</p>}
-    </section>}
-    {showMaterial && <section aria-label="Material setup">
-      <FormField label="Material type"><input {...materialForm.register("materialType")} /></FormField>
-      <FormField label="Color"><input {...materialForm.register("color")} /></FormField>
-      <FormField label="Amount (grams)"><input type="number" {...materialForm.register("amount")} /></FormField>
+    </section></SetupDialog>}
+    {open === "material" && <SetupDialog title="Material setup" onClose={() => setOpen(null)}><section aria-label="Material setup" className="grid gap-4">
+      <FormField label="Material type"><input className={inputClass} {...materialForm.register("materialType")} /></FormField>
+      <FormField label="Color"><input className={inputClass} {...materialForm.register("color")} /></FormField>
+      <FormField label="Amount (grams)"><input className={inputClass} type="number" step="any" {...materialForm.register("amount")} /></FormField>
       <Button type="button" onClick={() => void handleSaveMaterial()}>Save material</Button>
       {materialStatus && <p role="status">{materialStatus}</p>}
-    </section>}
+    </section></SetupDialog>}
   </Card>;
 }

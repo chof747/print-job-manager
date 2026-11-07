@@ -41,6 +41,7 @@ it("sets up printer and material facts before checking job eligibility", async (
   fireEvent.click(within(printer).getByRole("checkbox", { name: /enclosure/i }));
   fireEvent.click(within(printer).getByRole("button", { name: /save printer/i }));
   await waitFor(() => expect(fetchMock).toHaveBeenCalledWith(`${base}/printers/printer-1`, expect.objectContaining({ method: "PUT" })));
+  fireEvent.click(screen.getByRole("button", { name: "Close" }));
 
   fireEvent.click(screen.getByRole("button", { name: /add material/i }));
   const inventory = screen.getByRole("region", { name: /material setup/i });
@@ -49,6 +50,7 @@ it("sets up printer and material facts before checking job eligibility", async (
   fireEvent.change(within(inventory).getByLabelText(/amount/i), { target: { value: "100" } });
   fireEvent.click(within(inventory).getByRole("button", { name: /save material/i }));
   await waitFor(() => expect(fetchMock).toHaveBeenCalledWith(`${base}/inventory/materials`, expect.objectContaining({ method: "POST" })));
+  fireEvent.click(screen.getByRole("button", { name: "Close" }));
 
   const active = await screen.findByRole("region", { name: /active/i });
   fireEvent.click(within(active).getByRole("button", { name: /details/i }));
