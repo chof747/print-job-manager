@@ -12,6 +12,7 @@ import {
   type ImportedArtifact,
   type Job,
   type PlanningValues,
+  type HardRequirements,
 } from "./job-import-api-client";
 import { useJobScheduling } from "./use-job-scheduling";
 
@@ -75,7 +76,7 @@ export function useJobImport(apiBaseUrl: string | null, materialFilter = "") {
     }
   }
 
-  async function create(artifactId: string, planningValues: PlanningValues) {
+  async function create(artifactId: string, planningValues: PlanningValues, requirements?: HardRequirements) {
     if (!apiBaseUrl) {
       return;
     }
@@ -83,7 +84,9 @@ export function useJobImport(apiBaseUrl: string | null, materialFilter = "") {
     let jobCreated = false;
     setIsCreated(false);
     try {
-      const createdJob = await createJob(apiBaseUrl, importId ?? artifactId, planningValues);
+      const createdJob = requirements
+        ? await createJob(apiBaseUrl, importId ?? artifactId, planningValues, requirements)
+        : await createJob(apiBaseUrl, importId ?? artifactId, planningValues);
       jobCreated = true;
       setCreateError(null);
       void queryClient.invalidateQueries({ queryKey: ["cockpit", apiBaseUrl] });
