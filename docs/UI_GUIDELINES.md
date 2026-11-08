@@ -15,6 +15,11 @@ an overlay dialog rather than an in-page panel. This includes setup and editing
 flows, such as job or printer setup. Ensure the dialog remains usable at narrow
 viewport sizes and can be dismissed without saving.
 
+**Exception:** A multi-row filter rail may remain in-page when the user can
+collapse it completely, leaving the filtered content accessible. This exception
+is for filtering controls; a collapsible panel is not a substitute for an overlay
+dialog in multi-row setup or editing flows.
+
 ## Saving in panels and dialogs
 
 - Close or hide an editing panel or dialog after its save or update succeeds.
@@ -24,6 +29,16 @@ viewport sizes and can be dismissed without saving.
   user's entries, and show an actionable error. Do not report success or discard
   the input.
 - Test both successful and unsuccessful saves, including asynchronous failures.
+
+## Transient messages
+
+Present transient feedback and operation results in a dismissible message overlay,
+not as a new message embedded below the triggering control. Use green styling for
+successful outcomes and red for failures or blocked outcomes, with text that
+communicates the outcome without relying on color alone. Keep overlays accessible
+by keyboard, restore focus on dismissal, and retain the user's input. Field-level
+validation may additionally identify the affected control inline. Existing screens
+should be brought into line as they are updated.
 
 ## Input widgets
 
