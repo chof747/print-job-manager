@@ -1,0 +1,116 @@
+name: Publish container images
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  packages: write
+
+concurrency:
+  group: publish-images-sha-${{ github.sha }}
+  queue: max
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    env:
+      PJM_BACKEND_IMAGE: print-job-manager-backend-checked:local
+      PJM_FRONTEND_IMAGE: print-job-manager-frontend-checked:local
+    outputs:
+      backend: ${{ steps.digests.outputs.backend }}
+      frontend: ${{ steps.digests.outputs.frontend }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Check frontend image dependency files
+        run: corepack pnpm run check:frontend-image-deps
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+      - uses: astral-sh/setup-uv@v6
+      - name: Build production images
+        run: |
+          docker build --platform linux/amd64 --tag "$PJM_BACKEND_IMAGE" ./backend
+          docker build --platform linux/amd64 --tag "$PJM_FRONTEND_IMAGE" ./frontend
+      - name: Check production images
+        run: uv run --locked --project backend --group test pytest backend/tests/test_production_image.py backend/tests/test_frontend_production_image.py -q
+      - name: Prepare image names
+        id: names
+        run: echo "owner=${GITHUB_REPOSITORY_OWNER,,}" >> "$GITHUB_OUTPUT"
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Publish commit images
+        run: |
+          echo "::warning::SHA image publication is not atomic; a failure or cancellation can leave a partial image pair. Rerun the workflow for this commit to publish both images."
+          trap 'echo "::error::SHA image publication failed or was interrupted; the image pair may be partial. Rerun the workflow for this commit."' ERR TERM INT
+          docker tag "$PJM_BACKEND_IMAGE" ghcr.io/${{ steps.names.outputs.owner }}/print-job-manager-backend:${{ github.sha }}
+          docker push ghcr.io/${{ steps.names.outputs.owner }}/print-job-manager-backend:${{ github.sha }}
+          docker tag "$PJM_FRONTEND_IMAGE" ghcr.io/${{ steps.names.outputs.owner }}/print-job-manager-frontend:${{ github.sha }}
+          docker push ghcr.io/${{ steps.names.outputs.owner }}/print-job-manager-frontend:${{ github.sha }}
+      - name: Record published digests
+        id: digests
+        run: |
+          for component in backend frontend; do
+            image="ghcr.io/${{ steps.names.outputs.owner }}/print-job-manager-$component:${{ github.sha }}"
+            digest=$(docker image inspect "$image" --format '{{index .RepoDigests 0}}')
+            [[ "$digest" == *@sha256:* ]] || { echo "::error::Missing published digest for $component"; exit 1; }
+            echo "$component=$digest" >> "$GITHUB_OUTPUT"
+          done
+      - name: Create digest pair record
+        env:
+          BACKEND_DIGEST: ${{ steps.digests.outputs.backend }}
+          FRONTEND_DIGEST: ${{ steps.digests.outputs.frontend }}
+        run: |
+          printf 'backend=%s\nfrontend=%s\n' "$BACKEND_DIGEST" "$FRONTEND_DIGEST" > image-digests.txt
+      - name: Upload digest pair
+        uses: actions/upload-artifact@v4
+        with:
+          name: image-digests-${{ github.sha }}
+          path: image-digests.txt
+          if-no-files-found: error
+  latest:
+    needs: publish
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    concurrency:
+      group: publish-images-latest
+      queue: max
+      cancel-in-progress: false
+    steps:
+      - uses: actions/checkout@v4
+      - name: Prepare image names
+        id: names
+        run: echo "owner=${GITHUB_REPOSITORY_OWNER,,}" >> "$GITHUB_OUTPUT"
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Verify main has not advanced
+        if: github.ref == 'refs/heads/main'
+        run: |
+          main_sha=$(git ls-remote origin refs/heads/main | cut -f1)
+          if [ "$main_sha" != "$GITHUB_SHA" ]; then
+            echo "::error::Main has advanced; refusing to publish stale latest images."
+            exit 1
+          fi
+      - name: Publish latest images
+        if: github.ref == 'refs/heads/main'
+        run: |
+          echo "::warning::Latest image updates are not atomic; failure or cancellation can leave backend and frontend on different commits. Rerun the current main workflow to repair them."
+          trap 'echo "::error::Latest image publication failed or was interrupted; backend and frontend latest tags may differ. Rerun the current main workflow."' ERR TERM INT
+          docker pull '${{ needs.publish.outputs.backend }}'
+          docker pull '${{ needs.publish.outputs.frontend }}'
+          docker tag '${{ needs.publish.outputs.backend }}' ghcr.io/${{ steps.names.outputs.owner }}/print-job-manager-backend:latest
+          docker push ghcr.io/${{ steps.names.outputs.owner }}/print-job-manager-backend:latest
+          docker tag '${{ needs.publish.outputs.frontend }}' ghcr.io/${{ steps.names.outputs.owner }}/print-job-manager-frontend:latest
+          docker push ghcr.io/${{ steps.names.outputs.owner }}/print-job-manager-frontend:latest

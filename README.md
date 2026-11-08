@@ -1,6 +1,73 @@
 # print-job-manager
 A managing app that allows planning of 3d printing jobs based on projects and a prioritised list of models
 
+## Production images
+
+The publishing workflow builds separate `linux/amd64` images in GHCR:
+
+- `ghcr.io/<owner>/print-job-manager-backend:<commit-sha>`
+- `ghcr.io/<owner>/print-job-manager-frontend:<commit-sha>`
+
+Replace `<owner>` with the lowercase GitHub repository owner and `<commit-sha>`
+with the triggering commit SHA. Images published from `main` also receive the
+`latest` tag. The deployment configuration belongs in the separate install repository.
+
+### Deployment and publication recovery
+
+For a consistent deployment, use the paired backend and frontend digest references
+from the **Publish container images** workflow's successful run. In GitHub Actions,
+open that run and download its `image-digests-<commit-sha>` artifact; the
+`image-digests.txt` file contains `backend` and `frontend` references to use together
+in the install repository. Do not independently resolve mutable tags for a pair.
+The artifact is uploaded after both SHA pushes succeed, but a subsequent `latest`
+promotion can still fail, so check the overall workflow result.
+
+Both images are built once and checked before publication. SHA tags are mutable:
+a retry rebuilds and rechecks both images, republishes both SHA tags, and records
+the resulting digest pair, which may differ from the previous run. Neither SHA
+pushes nor `latest` promotion are atomic. A failure or interruption can leave a
+partial or inconsistent tag pair; rerun the workflow for the commit to rebuild,
+recheck and republish both images, then use the new artifact. For `latest` recovery,
+run the workflow for current `main`; it promotes the recorded pair.
+
+The workflow checks that `main` has not advanced before promoting `latest`, but
+`main` can advance after that check and promotion is still not atomic. A newer
+successful main run should repair `latest`. Restrict GHCR package write access to
+trusted publishers: workflow concurrency does not prevent other authorized writers
+from changing tags.
+
+The frontend image uses copies of the root `package.json`, `pnpm-lock.yaml`, and
+`pnpm-workspace.yaml` in `frontend/` because it has a separate build context.
+After updating any of these root files, copy all three into `frontend/`, commit
+the copies with the originals, and run `pnpm run check:frontend-image-deps`.
+Image publication runs this check before building.
+
+### Image runtime configuration
+
+- The backend listens on container port `8000` and runs as UID/GID `65532`.
+  Set `PRINT_JOB_MANAGER_DATABASE_URL` to the reachable PostgreSQL database URL
+  (using `postgresql+psycopg://`). Set `PRINT_JOB_MANAGER_FRONTEND_ORIGIN` to
+  the browser's frontend origin when it differs from the default.
+- Set `PRINT_JOB_MANAGER_ARTIFACT_STORAGE_PATH` to a persistent mounted directory
+  writable by UID/GID `65532`. The default is `data/artifacts` relative to
+  `/app/backend`; the image does not provision a writable persistent directory.
+- The frontend listens on container port `8080` and runs as UID/GID `101`.
+  To configure its API endpoint without rebuilding, mount a JSON file at
+  `/usr/share/nginx/html/runtime-config.json` that is readable by UID/GID `101`, for example
+  `{"apiBaseUrl":"/api/v1"}`. The URL must be reachable from the browser.
+  For a relative URL, configure an external reverse proxy to route `/api/v1`
+  to the backend; the frontend image itself does not proxy API requests.
+
+The backend automatically runs `alembic upgrade head` before starting; migration
+failure prevents startup. Ensure PostgreSQL is ready and the database user can
+apply migrations. Coordinate deployments so migrations do not run concurrently.
+Check schema compatibility with both old and new application versions before a
+rolling deployment. Before rollout, plan backups and a rollback: switching back
+to an older image does not reverse migrations, and an older image may not support
+the upgraded schema. Assess the relevant Alembic downgrade and data-loss risks
+before any schema rollback; the pre-launch policy below does not guarantee data
+preservation.
+
 ## Backend Setup
 
 The backend uses `uv` with `backend/pyproject.toml` and `backend/uv.lock`.
