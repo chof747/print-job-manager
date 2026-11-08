@@ -36,9 +36,17 @@ Present transient feedback and operation results in a dismissible message overla
 not as a new message embedded below the triggering control. Use green styling for
 successful outcomes and red for failures or blocked outcomes, with text that
 communicates the outcome without relying on color alone. Keep overlays accessible
-by keyboard, restore focus on dismissal, and retain the user's input. Field-level
-validation may additionally identify the affected control inline. Existing screens
-should be brought into line as they are updated.
+by keyboard, restore focus on dismissal, and retain the user's input. Errors or
+blocked outcomes that prevent a flow from continuing must use an overlay.
+Existing screens should be brought into line as they are updated.
+
+Field validation after a save or submission attempt is an exception: display an
+actionable message directly beneath each affected input, keeping the panel or
+dialog open and preserving the user's entries. Format the message with red text,
+a light red background, and a rounded red border, as in the eligibility check
+(`rounded-lg border border-red-300 bg-red-50 px-3 py-2 text-sm text-red-800`).
+Associate the message with its input and mark the input invalid for assistive
+technology; communicate the error in text rather than relying on color alone.
 
 ## Input widgets
 
