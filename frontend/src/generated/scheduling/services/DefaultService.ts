@@ -3,6 +3,10 @@
 /* tslint:disable */
 /* eslint-disable */
 import type { CockpitResponse } from '../models/CockpitResponse';
+import type { EligibilityRequest } from '../models/EligibilityRequest';
+import type { EligibilityResponse } from '../models/EligibilityResponse';
+import type { MaterialInventoryRequest } from '../models/MaterialInventoryRequest';
+import type { PrinterCapabilitiesRequest } from '../models/PrinterCapabilitiesRequest';
 import type { SchedulingJobResponse } from '../models/SchedulingJobResponse';
 import type { UpdateSchedulingRequest } from '../models/UpdateSchedulingRequest';
 import type { CancelablePromise } from '../core/CancelablePromise';
@@ -110,6 +114,77 @@ export class DefaultService {
             path: {
                 'job_id': jobId,
             },
+            errors: {
+                422: `Validation Error`,
+            },
+        });
+    }
+    /**
+     * Job Eligibility
+     * Check trusted printer capabilities against inventory-owned availability.
+     * @returns EligibilityResponse Successful Response
+     * @throws ApiError
+     */
+    public jobEligibilityApiV1JobsJobIdEligibilityPost({
+        jobId,
+        requestBody,
+    }: {
+        jobId: string,
+        requestBody: EligibilityRequest,
+    }): CancelablePromise<EligibilityResponse> {
+        return this.httpRequest.request({
+            method: 'POST',
+            url: '/jobs/{job_id}/eligibility',
+            path: {
+                'job_id': jobId,
+            },
+            body: requestBody,
+            mediaType: 'application/json',
+            errors: {
+                422: `Validation Error`,
+            },
+        });
+    }
+    /**
+     * Put Printer
+     * @returns any Successful Response
+     * @throws ApiError
+     */
+    public putPrinterApiV1PrintersPrinterIdPut({
+        printerId,
+        requestBody,
+    }: {
+        printerId: string,
+        requestBody: PrinterCapabilitiesRequest,
+    }): CancelablePromise<Record<string, any>> {
+        return this.httpRequest.request({
+            method: 'PUT',
+            url: '/printers/{printer_id}',
+            path: {
+                'printer_id': printerId,
+            },
+            body: requestBody,
+            mediaType: 'application/json',
+            errors: {
+                422: `Validation Error`,
+            },
+        });
+    }
+    /**
+     * Add Inventory Material
+     * @returns any Successful Response
+     * @throws ApiError
+     */
+    public addInventoryMaterialApiV1InventoryMaterialsPost({
+        requestBody,
+    }: {
+        requestBody: MaterialInventoryRequest,
+    }): CancelablePromise<Record<string, any>> {
+        return this.httpRequest.request({
+            method: 'POST',
+            url: '/inventory/materials',
+            body: requestBody,
+            mediaType: 'application/json',
             errors: {
                 422: `Validation Error`,
             },

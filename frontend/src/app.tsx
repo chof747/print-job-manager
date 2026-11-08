@@ -1,4 +1,4 @@
-import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { QueryClient, QueryClientProvider, useQuery } from "@tanstack/react-query";
 import { Fragment, useContext, useEffect, useRef, useState } from "react";
 import { useForm } from "react-hook-form";
 
@@ -10,6 +10,9 @@ import { BootstrapStateCacheContext, RuntimeConfigContext } from "./runtime-conf
 import { Badge, Button, Card, FormField, ReasonList, StatusPill, Stepper } from "./ui";
 import { useJobImport } from "./use-job-import";
 import { QueueFilters } from "./queue-filters";
+import { OperatorSetup, SetupDialog } from "./operator-setup";
+import { useJobEligibility } from "./use-job-eligibility";
+import type { EligibilityResponse } from "./generated/scheduling/models/EligibilityResponse";
 
 
 function formatEstimatedDuration(seconds: number) {
@@ -77,6 +80,15 @@ type SchedulingFormValues = {
   printerId: string;
 };
 
+type ImportFormValues = {
+  planningValues: Record<string, string>;
+  requireEnclosure: boolean;
+  requireHardenedNozzle: boolean;
+  materialColor: string;
+  materialAmount: string;
+  requiredVolume: { x: string; y: string; z: string };
+};
+
 function formatExtractedValue(key: string, value: unknown) {
   if (key === "estimatedDuration" && typeof value === "number") return formatEstimatedDuration(value);
   if (key === "dimensions" && value && typeof value === "object" && "x" in value && "y" in value && "z" in value) {
@@ -112,10 +124,28 @@ function AppContent() {
   const [apiBaseUrl, setApiBaseUrl] = useState<string | null>(bootstrapStateCache?.value?.apiBaseUrl ?? null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [importError, setImportError] = useState<string | null>(null);
-  const [planningValues, setPlanningValues] = useState<Record<string, string>>({});
+  const [requirementErrors, setRequirementErrors] = useState<string[]>([]);
+  const importForm = useForm<ImportFormValues>({
+    defaultValues: { planningValues: {}, requireEnclosure: false, requireHardenedNozzle: false, materialColor: "", materialAmount: "", requiredVolume: { x: "", y: "", z: "" } },
+  });
+  const planningValues = importForm.watch("planningValues");
   const [editingJob, setEditingJob] = useState<Job | null>(null);
   const [detailJob, setDetailJob] = useState<Job | null>(null);
   const [detailError, setDetailError] = useState<string | null>(null);
+  const [eligibilityPrinterId, setEligibilityPrinterId] = useState("");
+  const [eligibility, setEligibility] = useState<({ printerId: string } & EligibilityResponse) | null>(null);
+  const [eligibilityError, setEligibilityError] = useState<string | null>(null);
+  const eligibilityRequest = useRef(0);
+  const eligibilityMutation = useJobEligibility();
+  const printers = useQuery({
+    queryKey: ["printers", apiBaseUrl],
+    enabled: !!apiBaseUrl,
+    queryFn: async (): Promise<string[]> => {
+      const response = await fetch(`${apiBaseUrl}/printers`);
+      if (!response.ok) throw new Error("Unable to load printers");
+      return response.json();
+    },
+  });
   const [detailSelection, setDetailSelection] = useState<{ jobId: string; section: string } | null>(null);
   const detailRequest = useRef(0);
   const [materialFilter, setMaterialFilter] = useState("");
@@ -204,30 +234,77 @@ function AppContent() {
     try {
       await importFile(file);
       setImportError(null);
-      setPlanningValues({});
+      setRequirementErrors([]);
+      importForm.reset({
+        planningValues: Object.fromEntries(Object.keys(importForm.getValues("planningValues")).map((key) => [key, ""])),
+        requireEnclosure: false, requireHardenedNozzle: false, materialColor: "", materialAmount: "",
+        requiredVolume: { x: "", y: "", z: "" },
+      });
     } catch (error: unknown) {
       setImportError(error instanceof Error ? error.message : "Unable to import G-code");
     }
   }
 
   async function handleCreateJob() {
+    const { planningValues, requireEnclosure, requireHardenedNozzle, materialColor, materialAmount, requiredVolume } = importForm.getValues();
     if (!artifact || missingPlanningValues.some((value) => !planningValues[value]?.trim())) {
       return;
     }
-
-    await create(artifact.id, planningValues);
+    const nozzle = planningValues.nozzleDiameter;
+    const errors: string[] = [];
+    if (nozzle && (!Number.isFinite(Number(nozzle)) || Number(nozzle) <= 0)) errors.push("Enter a positive finite nozzle diameter.");
+    const hasMaterialRequirement = Boolean(materialColor.trim() || materialAmount.trim());
+    if (materialAmount.trim() && (!Number.isFinite(Number(materialAmount)) || Number(materialAmount) <= 0)) errors.push("Enter a positive finite material amount.");
+    const volumeValues = [requiredVolume.x, requiredVolume.y, requiredVolume.z];
+    const hasVolumeRequirement = volumeValues.some((value) => value.trim());
+    if (hasVolumeRequirement && volumeValues.some((value) => !value.trim() || !Number.isFinite(Number(value)) || Number(value) <= 0)) errors.push("Enter positive finite values for all three build volume dimensions (X, Y, and Z).");
+    setRequirementErrors(errors);
+    if (errors.length) return;
+    const requirements = {
+      ...(requireEnclosure ? { enclosure: true } : {}),
+      ...(requireHardenedNozzle ? { hardenedNozzle: true } : {}),
+      ...(hasMaterialRequirement ? { material: { ...(materialColor.trim() ? { color: materialColor.trim() } : {}), ...(materialAmount.trim() ? { amountGrams: Number(materialAmount) } : {}) } } : {}),
+      ...(hasVolumeRequirement ? { buildVolume: { x: Number(requiredVolume.x), y: Number(requiredVolume.y), z: Number(requiredVolume.z) } } : {}),
+    };
+    const submittedValues = Object.fromEntries(Object.entries(planningValues).filter(([, value]) => value.trim()));
+    if (!submittedValues.nozzleDiameter?.trim()) delete submittedValues.nozzleDiameter;
+    await create(artifact.id, submittedValues, Object.keys(requirements).length ? requirements : undefined);
   }
 
   async function handleJobDetails(jobId: string, section: string) {
     const request = ++detailRequest.current;
+    eligibilityRequest.current++;
+    setEligibilityPrinterId("");
+    setEligibility(null);
+    setEligibilityError(null);
     setDetailSelection({ jobId, section });
     setDetailJob(null);
     setDetailError(null);
     try {
       const job = await fetchJob(apiBaseUrl!, jobId);
-      if (detailRequest.current === request) setDetailJob(job);
+      if (detailRequest.current === request) {
+        setDetailJob(job);
+        setEligibilityPrinterId(job.schedulingData.printerAssignment?.printerId ?? "");
+      }
     } catch {
       if (detailRequest.current === request) setDetailError("Unable to fetch job details");
+    }
+  }
+
+  async function handleCheckEligibility(jobId: string) {
+    const printerId = eligibilityPrinterId.trim();
+    if (!printerId) {
+      setEligibilityError("Select a printer to check eligibility.");
+      return;
+    }
+    const request = ++eligibilityRequest.current;
+    setEligibility(null);
+    setEligibilityError(null);
+    try {
+      const result = await eligibilityMutation.mutateAsync({ apiBaseUrl: apiBaseUrl!, jobId, printerId });
+      if (eligibilityRequest.current === request) setEligibility({ printerId, ...result });
+    } catch {
+      if (eligibilityRequest.current === request) setEligibilityError("Unable to check eligibility");
     }
   }
 
@@ -239,6 +316,7 @@ function AppContent() {
           <h3 className="text-base font-bold text-slate-900">Job details</h3>
           <button type="button" aria-label="Close details" className="rounded-md p-1 text-slate-500 hover:bg-slate-200 hover:text-slate-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-400" onClick={() => {
             detailRequest.current++;
+            eligibilityRequest.current++;
             setDetailSelection(null);
             setDetailJob(null);
             setDetailError(null);
@@ -255,6 +333,45 @@ function AppContent() {
             {typeof detailJob.executionData.material === "string" && <div><dt className="text-slate-500">Material</dt><dd className="mt-1 font-medium text-slate-900">{detailJob.executionData.material}</dd></div>}
           </dl>
         ) : <p role="status">Loading job details…</p>}
+        {detailJob && section === "active" && (
+          <div>
+            <FormField label="Printer ID">
+              <select aria-invalid={eligibilityError === "Select a printer to check eligibility." || undefined} aria-describedby={eligibilityError === "Select a printer to check eligibility." ? "eligibility-printer-error" : undefined} className="rounded-xl border border-slate-300 bg-white px-3 py-2 text-slate-900 shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-400" value={eligibilityPrinterId} onChange={(event) => {
+                eligibilityRequest.current++;
+                setEligibilityPrinterId(event.target.value);
+                setEligibility(null);
+                setEligibilityError(null);
+              }}>
+                <option value="">Select a printer</option>
+                {eligibilityPrinterId && !printers.data?.includes(eligibilityPrinterId) && <option value={eligibilityPrinterId}>{eligibilityPrinterId}{printers.isSuccess ? " (not in printer catalog)" : ""}</option>}
+                {(printers.data ?? []).map((id) => <option key={id} value={id}>{id}</option>)}
+              </select>
+            </FormField>
+            {eligibilityError === "Select a printer to check eligibility." && <p id="eligibility-printer-error" role="alert" className="mt-2 rounded-lg border border-red-300 bg-red-50 px-3 py-2 text-sm text-red-800">{eligibilityError}</p>}
+            {printers.isLoading && <p role="status">Loading printers…</p>}
+            {printers.isError && <p role="alert">Unable to load printers. Try refreshing the page.</p>}
+            {printers.isSuccess && printers.data.length === 0 && <p>No printers available. Set up a printer first.</p>}
+            <Button type="button" onClick={() => void handleCheckEligibility(jobId)}>Check eligibility</Button>
+            {eligibilityError && eligibilityError !== "Select a printer to check eligibility." && <SetupDialog title="Eligibility check failed" onClose={() => setEligibilityError(null)}>
+              <p role="alert" className="rounded-xl border border-red-300 bg-red-50 px-4 py-3 text-sm text-red-800">{eligibilityError}. Please try again.</p>
+            </SetupDialog>}
+            {eligibility && !eligibility.eligible && <SetupDialog title="Job blocked" onClose={() => setEligibility(null)}>
+              <div role="alert" className="rounded-xl border border-red-300 bg-red-50 p-4 text-red-800">
+                <p className="font-bold">{eligibility.printerId}: Blocked</p>
+                <p className="mt-2 text-sm">This job cannot run on this printer because:</p>
+                <ul className="mt-2 list-disc space-y-1 pl-5 text-sm">{eligibility.failures.map((failure, index) => <li key={`${failure.code}-${index}`}>{failure.code.replace(/_/g, " ")}</li>)}</ul>
+              </div>
+              {!!eligibility.satisfied?.length && <div className="mt-4 text-sm text-slate-600"><p className="font-bold">Satisfied requirements</p><ul className="mt-2 list-disc pl-5">{eligibility.satisfied.map((item, index) => <li key={`${item.code}-${index}`}>{item.code.replace(/_/g, " ")}</li>)}</ul></div>}
+            </SetupDialog>}
+            {eligibility?.eligible && <SetupDialog title="Job eligible" onClose={() => setEligibility(null)}>
+              <div role="status" className="rounded-xl border border-emerald-300 bg-emerald-50 p-4 text-emerald-800">
+                <p className="font-bold">{eligibility.printerId}: Eligible</p>
+                <p className="mt-2 text-sm">This job can run on this printer based on the current eligibility checks.</p>
+                {!!eligibility.satisfied?.length && <><p className="mt-3 text-sm font-bold">Satisfied requirements</p><ul className="mt-2 list-disc space-y-1 pl-5 text-sm">{eligibility.satisfied.map((item, index) => <li key={`${item.code}-${index}`}>{item.code.replace(/_/g, " ")}</li>)}</ul></>}
+              </div>
+            </SetupDialog>}
+          </div>
+        )}
       </Card>
     );
   }
@@ -266,6 +383,10 @@ function AppContent() {
     setSchedulingError(null);
     if (!priority.trim()) {
       setSchedulingError("Priority is required");
+      return;
+    }
+    if (assignmentMode && !printers.data?.includes(printerId)) {
+      setSchedulingError("Select a registered printer for this assignment.");
       return;
     }
     try {
@@ -356,7 +477,7 @@ function AppContent() {
                         />
                       </FormField>
                       <FormField label="Assignment mode">
-                        <select {...register("assignmentMode")}>
+                        <select className="rounded-xl border border-slate-300 bg-white px-3 py-2 text-slate-900 shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-400" {...register("assignmentMode")}>
                           <option value="">None</option>
                           <option value="preferred">Preferred</option>
                           <option value="required">Required</option>
@@ -364,9 +485,14 @@ function AppContent() {
                       </FormField>
                       {assignmentMode !== "" && (
                         <FormField label="Printer ID">
-                          <input {...register("printerId")} />
+                          <select className="rounded-xl border border-slate-300 bg-white px-3 py-2 text-slate-900 shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-400" {...register("printerId")}>
+                            <option value="">Select a printer</option>
+                            {(printers.data ?? []).map((id) => <option key={id} value={id}>{id}</option>)}
+                          </select>
                         </FormField>
                       )}
+                      {assignmentMode !== "" && printers.isError && <p role="alert">Unable to load printers. Try refreshing the page.</p>}
+                      {assignmentMode !== "" && printers.isSuccess && printers.data.length === 0 && <p>No printers available. Set up a printer first.</p>}
                       {schedulingError && <p role="alert">{schedulingError}</p>}
                       <Button type="button" onClick={() => void handleSaveScheduling(editingJob)}>Save scheduling</Button>
                     </div>
@@ -448,15 +574,39 @@ function AppContent() {
               <FormField label={formatPlanningValueLabel(value)}>
                 <input
                   className="rounded-xl border border-slate-300 bg-white px-3 py-2 text-slate-900 shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-400"
-                  value={planningValues[value] ?? ""}
-                  onChange={(event) => setPlanningValues({ ...planningValues, [value]: event.target.value })}
+                  {...importForm.register(`planningValues.${value}`)}
                 />
               </FormField>
             </Fragment>
-          ))}
-          {artifact && (
-            <>
-              <ReasonList reasons={missingPlanningValues.length ? ["Complete the required planning values before creating the job."] : ["This job has all required planning values."]} />
+           ))}
+           {artifact && extractedMetadata.nozzleDiameter == null && !missingPlanningValues.includes("nozzleDiameter") && (
+             <FormField label="Nozzle diameter">
+               <input type="number" min="0" step="any" {...importForm.register("planningValues.nozzleDiameter")} />
+             </FormField>
+           )}
+           {artifact && (
+             <>
+              <label>
+                 <input type="checkbox" {...importForm.register("requireEnclosure")} />
+                Require enclosure
+              </label>
+              <label>
+                 <input type="checkbox" {...importForm.register("requireHardenedNozzle")} />
+                Require hardened nozzle
+              </label>
+              <FormField label="Material color">
+                 <input {...importForm.register("materialColor")} />
+              </FormField>
+              <FormField label="Material amount (grams)">
+                 <input type="number" min="0" {...importForm.register("materialAmount")} />
+              </FormField>
+              {(["x", "y", "z"] as const).map((axis) => (
+                <FormField key={axis} label={`Minimum build volume ${axis.toUpperCase()}`}>
+                  <input type="number" min="0" step="any" {...importForm.register(`requiredVolume.${axis}`)} />
+                </FormField>
+              ))}
+              {requirementErrors.length > 0 && <div role="alert">{requirementErrors.map((error) => <p key={error}>{error}</p>)}</div>}
+              {(missingPlanningValues.length > 0 || requirementErrors.length === 0) && <ReasonList reasons={missingPlanningValues.length ? ["Complete the required planning values before creating the job."] : ["This job has all required planning values."]} />}
               <Button
                 type="button"
                 disabled={isImporting || hasBlankPlanningValue}
@@ -474,6 +624,7 @@ function AppContent() {
           )}
           </div>
         </Card>
+        <OperatorSetup apiBaseUrl={apiBaseUrl} />
         <Card as="aside" aria-label="Backend runtime status" className="h-fit">
           <p className="text-xs font-extrabold uppercase tracking-widest text-slate-500">System summary</p>
           <h2 className="mt-1 text-lg font-bold">Backend runtime</h2>

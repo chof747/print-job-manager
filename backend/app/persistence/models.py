@@ -180,6 +180,27 @@ def _keys(value, allowed, required=False):
         )
 
 
+class PrinterCapabilityRecord(Base):
+    __tablename__ = "printer_capabilities"
+
+    id: Mapped[str] = mapped_column(String(255), primary_key=True)
+    enclosure: Mapped[bool] = mapped_column(Boolean, nullable=False)
+    hardened_nozzle: Mapped[bool | None] = mapped_column(Boolean)
+    nozzle_diameter: Mapped[float | None] = mapped_column(Float)
+    build_volume_x: Mapped[float | None] = mapped_column(Float)
+    build_volume_y: Mapped[float | None] = mapped_column(Float)
+    build_volume_z: Mapped[float | None] = mapped_column(Float)
+
+
+class InventoryMaterialRecord(Base):
+    __tablename__ = "inventory_materials"
+
+    id: Mapped[int] = mapped_column(BigInteger, Identity(), primary_key=True)
+    material_type: Mapped[str] = mapped_column(Text, nullable=False)
+    color: Mapped[str] = mapped_column(Text, nullable=False)
+    amount_grams: Mapped[float] = mapped_column(Float, nullable=False)
+
+
 class JobRecord(SnapshotFacts, Base):
     __tablename__ = "jobs"
     __table_args__ = (
@@ -230,6 +251,13 @@ class JobRecord(SnapshotFacts, Base):
     execution_dimension_z: Mapped[float | None] = mapped_column(Float)
     execution_slicer: Mapped[str | None] = mapped_column(Text)
     execution_printer_profile: Mapped[str | None] = mapped_column(Text)
+    execution_requires_enclosure: Mapped[bool | None] = mapped_column(Boolean)
+    execution_requires_hardened_nozzle: Mapped[bool | None] = mapped_column(Boolean)
+    execution_material_color: Mapped[str | None] = mapped_column(Text)
+    execution_material_amount_grams: Mapped[float | None] = mapped_column(Float)
+    requirement_build_volume_x: Mapped[float | None] = mapped_column(Float)
+    requirement_build_volume_y: Mapped[float | None] = mapped_column(Float)
+    requirement_build_volume_z: Mapped[float | None] = mapped_column(Float)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), nullable=False
     )
@@ -252,6 +280,22 @@ class JobRecord(SnapshotFacts, Base):
             result["artifactFilename"] = self.artifact_filename
         if self.nozzle_diameter is not None:
             result["nozzleDiameter"] = self.nozzle_diameter
+        if self.execution_requires_enclosure is not None:
+            result["requirements"] = {"enclosure": self.execution_requires_enclosure}
+        if self.execution_requires_hardened_nozzle is not None:
+            result.setdefault("requirements", {})["hardenedNozzle"] = self.execution_requires_hardened_nozzle
+        if self.execution_material_color is not None or self.execution_material_amount_grams is not None:
+            result.setdefault("requirements", {})["material"] = {}
+            if self.execution_material_color is not None:
+                result["requirements"]["material"]["color"] = self.execution_material_color
+            if self.execution_material_amount_grams is not None:
+                result["requirements"]["material"]["amountGrams"] = self.execution_material_amount_grams
+        if self.requirement_build_volume_x is not None:
+            result.setdefault("requirements", {})["buildVolume"] = {
+                "x": self.requirement_build_volume_x,
+                "y": self.requirement_build_volume_y,
+                "z": self.requirement_build_volume_z,
+            }
         if self.execution_has_extracted:
             result["extractedMetadata"] = {
                 key: value
@@ -284,6 +328,7 @@ class JobRecord(SnapshotFacts, Base):
             "artifactFilename",
             "extractedMetadata",
             "nozzleDiameter",
+            "requirements",
         }
         if set(value) - known:
             raise ValueError(
@@ -295,6 +340,23 @@ class JobRecord(SnapshotFacts, Base):
         self.material = value.get("material")
         self.artifact_filename = value.get("artifactFilename")
         self.nozzle_diameter = value.get("nozzleDiameter")
+        requirements = value.get("requirements", {})
+        _keys(requirements, {"enclosure", "material", "hardenedNozzle", "buildVolume"})
+        self.execution_requires_enclosure = requirements.get("enclosure")
+        self.execution_requires_hardened_nozzle = requirements.get("hardenedNozzle")
+        material_requirement = requirements.get("material")
+        if material_requirement is not None:
+            _keys(material_requirement, {"color", "amountGrams"})
+            if not material_requirement:
+                raise ValueError("Material requirement must contain color or amountGrams")
+        self.execution_material_color = material_requirement.get("color") if material_requirement is not None else None
+        self.execution_material_amount_grams = material_requirement.get("amountGrams") if material_requirement is not None else None
+        build_volume = requirements.get("buildVolume")
+        if build_volume is not None:
+            _keys(build_volume, {"x", "y", "z"}, required=True)
+        self.requirement_build_volume_x = build_volume["x"] if build_volume is not None else None
+        self.requirement_build_volume_y = build_volume["y"] if build_volume is not None else None
+        self.requirement_build_volume_z = build_volume["z"] if build_volume is not None else None
         self.execution_has_extracted = "extractedMetadata" in value
         extracted = value.get("extractedMetadata", {})
         _keys(extracted, {"material", "estimatedDuration", "filamentWeightGrams", "nozzleDiameter", "layerHeight", "dimensions", "slicer", "printerProfile"})

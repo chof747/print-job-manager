@@ -26,6 +26,8 @@ const maxIterations = Number(process.env.SANDCASTLE_MAX_ITERATIONS ?? "5");
 const logVerbose = process.env.SANDCASTLE_LOG_VERBOSE === "true";
 const installProjectDeps = process.env.SANDCASTLE_INSTALL_PROJECT_DEPS !== "false";
 const installNodeDeps = process.env.SANDCASTLE_INSTALL_NODE_DEPS !== "false";
+// Fresh worktrees may need to create environments and fetch dependencies over a slow bind mount.
+const setupHookTimeoutMs = 10 * 60 * 1000;
 const dockerNodeModulesPath = resolve(".sandcastle/tmp/docker-node_modules");
 const minDockerMemoryBytes = Number(
   process.env.SANDCASTLE_MIN_DOCKER_MEMORY_BYTES ?? String(4 * 1024 * 1024 * 1024),
@@ -428,12 +430,14 @@ try {
                     "mkdir -p .sandcastle/tmp/sandbox-tmp .sandcastle/tmp/xdg-config .sandcastle/tmp/opencode-state .sandcastle/tmp/opencode-cache .sandcastle/tmp/uv-cache .sandcastle/tmp/npm-cache .sandcastle/tmp/pnpm-home/bin .sandcastle/tmp/pnpm-store /home/agent/.local/share/opencode/log && opencode auth import /home/agent/host-auth/auth.json && gh auth setup-git",
                 },
                 {
+                  timeoutMs: setupHookTimeoutMs,
                   command:
                     "python3 -m pip --version && python3 -m venv .sandcastle/tmp/sandcastle-venv-check && rm -rf .sandcastle/tmp/sandcastle-venv-check && uv --version && node --version && npm --version && pnpm --version && tsx --version && gh --version",
                 },
                 ...(installProjectDeps
                   ? [
                       {
+                        timeoutMs: setupHookTimeoutMs,
                         command:
                           "if [ -f backend/pyproject.toml ]; then uv run --project backend --group test python -c 'import fastapi, uvicorn, pytest'; fi",
                       },
@@ -442,6 +446,7 @@ try {
               ...(installNodeDeps
                 ? [
                     {
+                      timeoutMs: setupHookTimeoutMs,
                       command:
                         "if [ -f package.json ]; then pnpm install --frozen-lockfile --store-dir /home/agent/workspace/.sandcastle/tmp/pnpm-store && pnpm exec vitest --version; fi",
                     },

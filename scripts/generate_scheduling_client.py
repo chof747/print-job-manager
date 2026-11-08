@@ -8,7 +8,7 @@ from pathlib import Path
 from backend.app.main import app
 
 schema = app.openapi()
-paths = ("/api/v1/jobs/{job_id}/scheduling", "/api/v1/cockpit", "/api/v1/jobs/{job_id}")
+paths = ("/api/v1/jobs/{job_id}/scheduling", "/api/v1/cockpit", "/api/v1/jobs/{job_id}", "/api/v1/jobs/{job_id}/eligibility", "/api/v1/printers/{printer_id}", "/api/v1/inventory/materials")
 schema["paths"] = {path.removeprefix("/api/v1"): schema["paths"][path] for path in paths}
 schemas = schema["components"]["schemas"]
 referenced = set()
@@ -48,3 +48,7 @@ with tempfile.TemporaryDirectory() as directory:
         ],
         check=True,
     )
+
+# The generator emits an extra blank line at the end of each model.
+for model_path in Path("frontend/src/generated/scheduling/models").glob("*.ts"):
+    model_path.write_text(model_path.read_text(encoding="utf-8").rstrip() + "\n", encoding="utf-8")

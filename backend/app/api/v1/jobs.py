@@ -19,6 +19,11 @@ from pydantic.json_schema import SkipJsonSchema
 
 from ...cockpit import CockpitFilters, filter_queue_jobs, project_cockpit
 from ...config import get_settings
+from ...eligibility import InventoryAvailability, evaluate_eligibility
+from ...persistence.eligibility_repositories import (
+    SqlAlchemyMaterialInventory,
+    SqlAlchemyPrinterCatalog,
+)
 from ...persistence.import_repository import SqlAlchemyImportRepository
 from ...persistence.job_repository import (
     SchedulingVersionConflict,
@@ -29,10 +34,67 @@ router = APIRouter()
 logger = logging.getLogger(__name__)
 
 
+class BuildVolumeRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    x: float = Field(gt=0, allow_inf_nan=False, strict=True)
+    y: float = Field(gt=0, allow_inf_nan=False, strict=True)
+    z: float = Field(gt=0, allow_inf_nan=False, strict=True)
+
+
+class MaterialRequirement(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    color: str | SkipJsonSchema[None] = None
+    amount_grams: float | SkipJsonSchema[None] = Field(default=None, alias="amountGrams", gt=0, allow_inf_nan=False)
+
+
+class HardRequirements(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    enclosure: Annotated[bool, Field(strict=True)] | SkipJsonSchema[None] = None
+    hardened_nozzle: Annotated[bool, Field(strict=True)] | SkipJsonSchema[None] = Field(default=None, alias="hardenedNozzle")
+    material: MaterialRequirement | SkipJsonSchema[None] = None
+    build_volume: BuildVolumeRequest | SkipJsonSchema[None] = Field(default=None, alias="buildVolume")
+
+
 class CreateJobRequest(BaseModel):
     model_config = ConfigDict(extra="allow")
 
     material: str | None = None
+    requirements: HardRequirements | SkipJsonSchema[None] = None
+    nozzle_diameter: object = Field(
+        default=None, alias="nozzleDiameter", json_schema_extra={"type": "number", "exclusiveMinimum": 0}
+    )
+
+    @model_validator(mode="before")
+    @classmethod
+    def validate_enclosure_requirement(cls, value: object) -> object:
+        if isinstance(value, dict):
+            requirements = value.get("requirements")
+            if "requirements" in value and not isinstance(requirements, dict):
+                raise ValueError("requirements must be an object")
+            if isinstance(requirements, dict) and requirements.keys() - {"enclosure", "material", "hardenedNozzle", "buildVolume"}:
+                raise ValueError("unknown hard requirement")
+            if isinstance(requirements, dict) and "buildVolume" in requirements and not isinstance(requirements["buildVolume"], dict):
+                raise ValueError("buildVolume requirement must be an object")
+            if isinstance(requirements, dict) and "enclosure" in requirements:
+                if not isinstance(requirements["enclosure"], bool):
+                    raise ValueError("enclosure requirement must be a boolean")
+            if isinstance(requirements, dict) and "hardenedNozzle" in requirements:
+                if not isinstance(requirements["hardenedNozzle"], bool):
+                    raise ValueError("hardenedNozzle requirement must be a boolean")
+            if isinstance(requirements, dict) and "material" in requirements:
+                material = requirements["material"]
+                if not isinstance(material, dict) or not material or set(material) - {"color", "amountGrams"}:
+                    raise ValueError("material requirement must contain color or amountGrams")
+                amount = material.get("amountGrams")
+                color = material.get("color")
+                if (("color" in material and (not isinstance(color, str) or not color.strip()))
+                    or ("amountGrams" in material and (isinstance(amount, bool) or not isinstance(amount, (int, float))
+                    or not math.isfinite(amount) or amount <= 0))):
+                    raise ValueError("invalid material requirement")
+        return value
 
 
 class PreferredPrinterAssignment(BaseModel):
@@ -65,6 +127,7 @@ class ExecutionDataResponse(BaseModel):
     material: str | None = None
     artifact_filename: str | None = Field(default=None, alias="artifactFilename")
     nozzle_diameter: float | None = Field(default=None, alias="nozzleDiameter")
+    requirements: HardRequirements | SkipJsonSchema[None] = None
 
 
 class SchedulingJobResponse(BaseModel):
@@ -717,7 +780,8 @@ class ImportService:
                 status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
                 detail={"missingPlanningValues": missing_values},
             )
-        if "nozzleDiameter" in missing_planning_values:
+        extracted_nozzle = extracted_metadata.get("nozzleDiameter") if isinstance(extracted_metadata, dict) else None
+        if "nozzleDiameter" in planning_values and extracted_nozzle is None:
             nozzle = planning_values["nozzleDiameter"]
             try:
                 if isinstance(nozzle, bool):
@@ -739,6 +803,8 @@ class ImportService:
             "artifactRef": artifact_id,
             "material": material,
         }
+        if "requirements" in planning_values:
+            execution_data["requirements"] = deepcopy(planning_values["requirements"])
         if isinstance(filename, str):
             execution_data["artifactFilename"] = filename
         execution_data.update(
@@ -747,10 +813,10 @@ class ImportService:
                 for value in missing_planning_values
             }
         )
-        if isinstance(extracted_metadata, dict):
-            extracted_nozzle = extracted_metadata.get("nozzleDiameter")
-            if extracted_nozzle is not None:
-                execution_data["nozzleDiameter"] = extracted_nozzle
+        if extracted_nozzle is not None:
+            execution_data["nozzleDiameter"] = extracted_nozzle
+        elif "nozzleDiameter" in planning_values:
+            execution_data["nozzleDiameter"] = planning_values["nozzleDiameter"]
         if extracted_metadata is not None:
             execution_data["extractedMetadata"] = deepcopy(extracted_metadata)
 
@@ -823,7 +889,7 @@ async def import_gcode(file: UploadFile = File(...)) -> dict[str, object]:  # no
 async def create_job_from_import(
     artifact_id: str, request: CreateJobRequest, response: Response
 ) -> dict[str, object]:
-    planning_values = request.model_dump()
+    planning_values = request.model_dump(by_alias=True, exclude_unset=True)
     job, created = get_import_service().create_job_with_status(
         artifact_id=artifact_id,
         material=request.material,
@@ -896,6 +962,111 @@ def job_detail(job_id: str) -> dict[str, object]:
     if job is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND)
     return job
+
+
+material_inventory = SqlAlchemyMaterialInventory()
+
+
+def get_inventory_availability() -> InventoryAvailability:
+    return material_inventory
+
+
+printer_catalog = SqlAlchemyPrinterCatalog()
+
+
+class PrinterCapabilitiesRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    enclosure: bool = Field(strict=True)
+    hardened_nozzle: bool | None = Field(default=None, alias="hardenedNozzle", strict=True)
+    nozzle_diameter: float | None = Field(default=None, alias="nozzleDiameter", gt=0, allow_inf_nan=False, strict=True)
+    build_volume: BuildVolumeRequest | None = Field(default=None, alias="buildVolume")
+
+
+class MaterialInventoryRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    material_type: str = Field(alias="materialType", min_length=1)
+    color: str = Field(min_length=1)
+    amount_grams: float = Field(alias="amountGrams", gt=0, allow_inf_nan=False)
+
+
+class MaterialAmountCorrection(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    amount_grams: float = Field(alias="amountGrams", ge=0, allow_inf_nan=False, strict=True)
+
+
+@router.get("/printers", response_model=list[str])
+def list_printers() -> list[str]:
+    return printer_catalog.list_printer_ids()
+
+
+@router.put("/printers/{printer_id}")
+def put_printer(printer_id: str, request: PrinterCapabilitiesRequest) -> dict[str, object]:
+    printer_catalog.add_printer(
+        printer_id, request.enclosure, request.hardened_nozzle, request.nozzle_diameter,
+        request.build_volume.model_dump() if request.build_volume else None,
+    )
+    return {"id": printer_id, **request.model_dump(by_alias=True)}
+
+
+@router.post("/inventory/materials", status_code=status.HTTP_201_CREATED)
+def add_inventory_material(request: MaterialInventoryRequest) -> dict[str, object]:
+    material_id = material_inventory.add_material(request.material_type, request.color, request.amount_grams)
+    return {"id": material_id, **request.model_dump(by_alias=True)}
+
+
+@router.patch("/inventory/materials/{material_id}")
+def correct_inventory_material(material_id: int, request: MaterialAmountCorrection) -> dict[str, object]:
+    if not material_inventory.correct_amount(material_id, request.amount_grams):
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND)
+    return {"id": material_id, "amountGrams": request.amount_grams}
+
+
+def get_printer_capabilities(printer_id: str) -> dict[str, object] | None:
+    return printer_catalog.get_capabilities(printer_id)
+
+
+class EligibilityFailure(BaseModel):
+    code: str
+
+
+class EligibilityPrinterRequest(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+
+    id: str = Field(min_length=1, max_length=255, strict=True)
+
+    @field_validator("id")
+    @classmethod
+    def reject_blank_id(cls, value: str) -> str:
+        if not value.strip():
+            raise ValueError("printer ID cannot be blank")
+        return value
+
+
+class EligibilityRequest(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+
+    printer: EligibilityPrinterRequest
+
+
+class EligibilityResponse(BaseModel):
+    eligible: bool
+    blocked: bool
+    failures: list[EligibilityFailure]
+    satisfied: list[EligibilityFailure]
+
+
+@router.post("/jobs/{job_id}/eligibility", response_model=EligibilityResponse)
+def job_eligibility(job_id: str, request: EligibilityRequest) -> dict[str, object]:
+    """Check trusted printer capabilities against inventory-owned availability."""
+    job = get_import_service().get_job(job_id)
+    if job is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND)
+    printer_id = request.printer.id
+    printer = get_printer_capabilities(printer_id)
+    return evaluate_eligibility(job, printer_id, printer, get_inventory_availability())
 
 
 @router.patch(

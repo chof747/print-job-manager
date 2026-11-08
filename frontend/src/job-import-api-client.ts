@@ -2,6 +2,7 @@ import { ApiError } from "./generated/scheduling/core/ApiError";
 import { SchedulingClient } from "./generated/scheduling/SchedulingClient";
 import type { SchedulingJobResponse } from "./generated/scheduling/models/SchedulingJobResponse";
 import type { UpdateSchedulingRequest } from "./generated/scheduling/models/UpdateSchedulingRequest";
+import type { EligibilityResponse } from "./generated/scheduling/models/EligibilityResponse";
 
 export type ImportedArtifact = {
   id: string;
@@ -58,11 +59,29 @@ export async function fetchJob(apiBaseUrl: string, jobId: string): Promise<Job> 
   }
 }
 
+export async function checkEligibility(apiBaseUrl: string, jobId: string, printerId: string): Promise<EligibilityResponse> {
+  const client = new SchedulingClient({ BASE: apiBaseUrl, ENCODE_PATH: encodeURIComponent });
+  try {
+    return await client.default.jobEligibilityApiV1JobsJobIdEligibilityPost({
+      jobId, requestBody: { printer: { id: printerId } },
+    });
+  } catch {
+    throw new Error("Unable to check eligibility");
+  }
+}
+
 export type CreateJobError = Error & {
   detail?: unknown;
 };
 
 export type PlanningValues = Record<string, string>;
+
+export type HardRequirements = {
+  enclosure?: boolean;
+  hardenedNozzle?: boolean;
+  material?: { color?: string; amountGrams?: number };
+  buildVolume?: { x: number; y: number; z: number };
+};
 
 export type ImportGcodeRequest = {
   file: File;
@@ -97,11 +116,12 @@ export async function createJob(
   apiBaseUrl: string,
   artifactId: string,
   planningValues: PlanningValues,
+  requirements?: HardRequirements,
 ): Promise<Job> {
   const response = await fetch(`${apiBaseUrl}/import/${artifactId}/jobs`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(planningValues),
+    body: JSON.stringify({ ...planningValues, ...(requirements ? { requirements } : {}) }),
   });
 
   if (!response.ok) {
