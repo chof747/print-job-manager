@@ -1,0 +1,13 @@
+name: Publish container images
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  placeholder:
+    runs-on: ubuntu-latest
+    steps:
+      - run: echo "Select the issue-68 branch to run the image publication workflow."
