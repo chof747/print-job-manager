@@ -9,7 +9,7 @@ type MaterialForm = { materialType: string; color: string; amount: string };
 
 const inputClass = "w-full rounded-xl border border-slate-300 bg-white px-3 py-2 text-slate-900 shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-400";
 
-function SetupDialog({ title, onClose, children }: { title: string; onClose: () => void; children: ReactNode }) {
+export function SetupDialog({ title, onClose, children }: { title: string; onClose: () => void; children: ReactNode }) {
   const dialog = useRef<HTMLDivElement>(null);
   const close = useRef(onClose);
   close.current = onClose;

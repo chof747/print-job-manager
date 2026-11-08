@@ -997,6 +997,11 @@ class MaterialAmountCorrection(BaseModel):
     amount_grams: float = Field(alias="amountGrams", ge=0, allow_inf_nan=False, strict=True)
 
 
+@router.get("/printers", response_model=list[str])
+def list_printers() -> list[str]:
+    return printer_catalog.list_printer_ids()
+
+
 @router.put("/printers/{printer_id}")
 def put_printer(printer_id: str, request: PrinterCapabilitiesRequest) -> dict[str, object]:
     printer_catalog.add_printer(

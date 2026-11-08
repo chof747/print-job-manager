@@ -45,6 +45,7 @@ vi.mock("../src/job-import-api-client", () => ({
 afterEach(() => {
   cleanup();
   vi.resetAllMocks();
+  vi.unstubAllGlobals();
 });
 
 
@@ -197,6 +198,7 @@ it("preserves a comma-containing tag when adding another tag", async () => {
 });
 
 it("edits a queued job preferred printer assignment with its current version", async () => {
+  vi.stubGlobal("fetch", vi.fn().mockResolvedValue({ ok: true, json: async () => ["printer-mk4"] }));
   loadRuntimeConfig.mockResolvedValue({ apiBaseUrl });
   fetchBackendHealth.mockResolvedValue({ status: "ok" });
   fetchBackendConfig.mockResolvedValue({ appName: "print-job-manager", apiBasePath: "/api/v1" });
@@ -212,6 +214,7 @@ it("edits a queued job preferred printer assignment with its current version", a
   await screen.findByText("calibration-cube.gcode");
   fireEvent.click(screen.getByRole("button", { name: /edit scheduling/i }));
   fireEvent.change(screen.getByLabelText(/assignment mode/i), { target: { value: "preferred" } });
+  await screen.findByRole("option", { name: "printer-mk4" });
   fireEvent.change(screen.getByLabelText(/printer id/i), { target: { value: "printer-mk4" } });
   fireEvent.click(screen.getByRole("button", { name: /save scheduling/i }));
 
@@ -223,6 +226,7 @@ it("edits a queued job preferred printer assignment with its current version", a
 });
 
 it("edits a queued job required printer assignment with its current version", async () => {
+  vi.stubGlobal("fetch", vi.fn().mockResolvedValue({ ok: true, json: async () => ["printer-mk4"] }));
   loadRuntimeConfig.mockResolvedValue({ apiBaseUrl });
   fetchBackendHealth.mockResolvedValue({ status: "ok" });
   fetchBackendConfig.mockResolvedValue({ appName: "print-job-manager", apiBasePath: "/api/v1" });
@@ -238,6 +242,7 @@ it("edits a queued job required printer assignment with its current version", as
   await screen.findByText("calibration-cube.gcode");
   fireEvent.click(screen.getByRole("button", { name: /edit scheduling/i }));
   fireEvent.change(screen.getByLabelText(/assignment mode/i), { target: { value: "required" } });
+  await screen.findByRole("option", { name: "printer-mk4" });
   fireEvent.change(screen.getByLabelText(/printer id/i), { target: { value: "printer-mk4" } });
   fireEvent.click(screen.getByRole("button", { name: /save scheduling/i }));
 

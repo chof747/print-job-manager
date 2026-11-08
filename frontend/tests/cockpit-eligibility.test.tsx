@@ -21,6 +21,7 @@ it("explains why an active job is blocked for a printer", async () => {
     if (url === "/runtime-config.json") return json({ apiBaseUrl: base });
     if (url === `${base}/health`) return json({ status: "ok" });
     if (url === `${base}/config`) return json({ appName: "print-job-manager" });
+    if (url === `${base}/printers`) return json(["printer-1"]);
     if (url === `${base}/queue`) return json({ jobs: [job] });
     if (url === `${base}/cockpit`) return json({ activeJobs: [job], failures: [], recentHistory: [] });
     if (url === `${base}/jobs/job-1`) return json(job);
@@ -37,10 +38,18 @@ it("explains why an active job is blocked for a printer", async () => {
   await within(active).findByText("part.gcode");
   fireEvent.click(within(active).getByRole("button", { name: /details/i }));
   const details = await screen.findByRole("region", { name: /job details/i });
+  fireEvent.click(within(details).getByRole("button", { name: /check eligibility/i }));
+  expect(within(details).getByRole("alert")).toHaveTextContent("Select a printer");
+  expect(within(details).getByLabelText(/printer id/i)).toHaveAttribute("aria-invalid", "true");
+  expect(within(details).getByRole("alert")).toHaveClass("bg-red-50", "border-red-300");
+  await within(details).findByRole("option", { name: "printer-1" });
   fireEvent.change(within(details).getByLabelText(/printer id/i), { target: { value: "printer-1" } });
   fireEvent.click(within(details).getByRole("button", { name: /check eligibility/i }));
 
-  expect(await within(details).findByText(/enclosure.*required|required.*enclosure/i)).toBeVisible();
-  expect(details).toHaveTextContent(/blocked|ineligible/i);
-  expect(details).toHaveTextContent("printer-1");
+  const dialog = await screen.findByRole("dialog", { name: "Job blocked" });
+  expect(within(dialog).getByText(/enclosure.*required|required.*enclosure/i)).toBeVisible();
+  expect(dialog).toHaveTextContent(/blocked/i);
+  expect(dialog).toHaveTextContent("printer-1");
+  fireEvent.click(within(dialog).getByRole("button", { name: "Close" }));
+  expect(screen.queryByRole("dialog", { name: "Job blocked" })).not.toBeInTheDocument();
 });

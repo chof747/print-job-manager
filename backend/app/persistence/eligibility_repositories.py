@@ -5,6 +5,10 @@ from . import database, models
 
 
 class SqlAlchemyPrinterCatalog:
+    def list_printer_ids(self) -> list[str]:
+        with database.SessionFactory() as session:
+            return list(session.scalars(select(models.PrinterCapabilityRecord.id).order_by(models.PrinterCapabilityRecord.id)))
+
     def add_printer(self, printer_id: str, enclosure: bool, hardened_nozzle: bool | None = None,
                     nozzle_diameter: float | None = None, build_volume: dict[str, float] | None = None) -> None:
         values = {

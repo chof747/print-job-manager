@@ -1,4 +1,4 @@
-import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { QueryClient, QueryClientProvider, useQuery } from "@tanstack/react-query";
 import { Fragment, useContext, useEffect, useRef, useState } from "react";
 import { useForm } from "react-hook-form";
 
@@ -10,7 +10,7 @@ import { BootstrapStateCacheContext, RuntimeConfigContext } from "./runtime-conf
 import { Badge, Button, Card, FormField, ReasonList, StatusPill, Stepper } from "./ui";
 import { useJobImport } from "./use-job-import";
 import { QueueFilters } from "./queue-filters";
-import { OperatorSetup } from "./operator-setup";
+import { OperatorSetup, SetupDialog } from "./operator-setup";
 import { useJobEligibility } from "./use-job-eligibility";
 import type { EligibilityResponse } from "./generated/scheduling/models/EligibilityResponse";
 
@@ -137,6 +137,15 @@ function AppContent() {
   const [eligibilityError, setEligibilityError] = useState<string | null>(null);
   const eligibilityRequest = useRef(0);
   const eligibilityMutation = useJobEligibility();
+  const printers = useQuery({
+    queryKey: ["printers", apiBaseUrl],
+    enabled: !!apiBaseUrl,
+    queryFn: async (): Promise<string[]> => {
+      const response = await fetch(`${apiBaseUrl}/printers`);
+      if (!response.ok) throw new Error("Unable to load printers");
+      return response.json();
+    },
+  });
   const [detailSelection, setDetailSelection] = useState<{ jobId: string; section: string } | null>(null);
   const detailRequest = useRef(0);
   const [materialFilter, setMaterialFilter] = useState("");
@@ -273,7 +282,10 @@ function AppContent() {
     setDetailError(null);
     try {
       const job = await fetchJob(apiBaseUrl!, jobId);
-      if (detailRequest.current === request) setDetailJob(job);
+      if (detailRequest.current === request) {
+        setDetailJob(job);
+        setEligibilityPrinterId(job.schedulingData.printerAssignment?.printerId ?? "");
+      }
     } catch {
       if (detailRequest.current === request) setDetailError("Unable to fetch job details");
     }
@@ -281,7 +293,10 @@ function AppContent() {
 
   async function handleCheckEligibility(jobId: string) {
     const printerId = eligibilityPrinterId.trim();
-    if (!printerId) return;
+    if (!printerId) {
+      setEligibilityError("Select a printer to check eligibility.");
+      return;
+    }
     const request = ++eligibilityRequest.current;
     setEligibility(null);
     setEligibilityError(null);
@@ -321,20 +336,40 @@ function AppContent() {
         {detailJob && section === "active" && (
           <div>
             <FormField label="Printer ID">
-              <input value={eligibilityPrinterId} onChange={(event) => {
+              <select aria-invalid={eligibilityError === "Select a printer to check eligibility." || undefined} aria-describedby={eligibilityError === "Select a printer to check eligibility." ? "eligibility-printer-error" : undefined} className="rounded-xl border border-slate-300 bg-white px-3 py-2 text-slate-900 shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-400" value={eligibilityPrinterId} onChange={(event) => {
                 eligibilityRequest.current++;
                 setEligibilityPrinterId(event.target.value);
                 setEligibility(null);
                 setEligibilityError(null);
-              }} />
+              }}>
+                <option value="">Select a printer</option>
+                {eligibilityPrinterId && !printers.data?.includes(eligibilityPrinterId) && <option value={eligibilityPrinterId}>{eligibilityPrinterId}{printers.isSuccess ? " (not in printer catalog)" : ""}</option>}
+                {(printers.data ?? []).map((id) => <option key={id} value={id}>{id}</option>)}
+              </select>
             </FormField>
+            {eligibilityError === "Select a printer to check eligibility." && <p id="eligibility-printer-error" role="alert" className="mt-2 rounded-lg border border-red-300 bg-red-50 px-3 py-2 text-sm text-red-800">{eligibilityError}</p>}
+            {printers.isLoading && <p role="status">Loading printers…</p>}
+            {printers.isError && <p role="alert">Unable to load printers. Try refreshing the page.</p>}
+            {printers.isSuccess && printers.data.length === 0 && <p>No printers available. Set up a printer first.</p>}
             <Button type="button" onClick={() => void handleCheckEligibility(jobId)}>Check eligibility</Button>
-            {eligibilityError && <p role="alert">{eligibilityError}</p>}
-            {eligibility && <div>
-              <p>{eligibility.printerId}: {eligibility.eligible ? "Eligible" : "Blocked"}</p>
-              <ul>{eligibility.failures.map((failure, index) => <li key={`${failure.code}-${index}`}>{failure.code.replace(/_/g, " ")}</li>)}</ul>
-              <ul>{eligibility.satisfied?.map((item, index) => <li key={`${item.code}-${index}`}>{item.code.replace(/_/g, " ")}</li>)}</ul>
-            </div>}
+            {eligibilityError && eligibilityError !== "Select a printer to check eligibility." && <SetupDialog title="Eligibility check failed" onClose={() => setEligibilityError(null)}>
+              <p role="alert" className="rounded-xl border border-red-300 bg-red-50 px-4 py-3 text-sm text-red-800">{eligibilityError}. Please try again.</p>
+            </SetupDialog>}
+            {eligibility && !eligibility.eligible && <SetupDialog title="Job blocked" onClose={() => setEligibility(null)}>
+              <div role="alert" className="rounded-xl border border-red-300 bg-red-50 p-4 text-red-800">
+                <p className="font-bold">{eligibility.printerId}: Blocked</p>
+                <p className="mt-2 text-sm">This job cannot run on this printer because:</p>
+                <ul className="mt-2 list-disc space-y-1 pl-5 text-sm">{eligibility.failures.map((failure, index) => <li key={`${failure.code}-${index}`}>{failure.code.replace(/_/g, " ")}</li>)}</ul>
+              </div>
+              {!!eligibility.satisfied?.length && <div className="mt-4 text-sm text-slate-600"><p className="font-bold">Satisfied requirements</p><ul className="mt-2 list-disc pl-5">{eligibility.satisfied.map((item, index) => <li key={`${item.code}-${index}`}>{item.code.replace(/_/g, " ")}</li>)}</ul></div>}
+            </SetupDialog>}
+            {eligibility?.eligible && <SetupDialog title="Job eligible" onClose={() => setEligibility(null)}>
+              <div role="status" className="rounded-xl border border-emerald-300 bg-emerald-50 p-4 text-emerald-800">
+                <p className="font-bold">{eligibility.printerId}: Eligible</p>
+                <p className="mt-2 text-sm">This job can run on this printer based on the current eligibility checks.</p>
+                {!!eligibility.satisfied?.length && <><p className="mt-3 text-sm font-bold">Satisfied requirements</p><ul className="mt-2 list-disc space-y-1 pl-5 text-sm">{eligibility.satisfied.map((item, index) => <li key={`${item.code}-${index}`}>{item.code.replace(/_/g, " ")}</li>)}</ul></>}
+              </div>
+            </SetupDialog>}
           </div>
         )}
       </Card>
@@ -348,6 +383,10 @@ function AppContent() {
     setSchedulingError(null);
     if (!priority.trim()) {
       setSchedulingError("Priority is required");
+      return;
+    }
+    if (assignmentMode && !printers.data?.includes(printerId)) {
+      setSchedulingError("Select a registered printer for this assignment.");
       return;
     }
     try {
@@ -438,7 +477,7 @@ function AppContent() {
                         />
                       </FormField>
                       <FormField label="Assignment mode">
-                        <select {...register("assignmentMode")}>
+                        <select className="rounded-xl border border-slate-300 bg-white px-3 py-2 text-slate-900 shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-400" {...register("assignmentMode")}>
                           <option value="">None</option>
                           <option value="preferred">Preferred</option>
                           <option value="required">Required</option>
@@ -446,9 +485,14 @@ function AppContent() {
                       </FormField>
                       {assignmentMode !== "" && (
                         <FormField label="Printer ID">
-                          <input {...register("printerId")} />
+                          <select className="rounded-xl border border-slate-300 bg-white px-3 py-2 text-slate-900 shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-400" {...register("printerId")}>
+                            <option value="">Select a printer</option>
+                            {(printers.data ?? []).map((id) => <option key={id} value={id}>{id}</option>)}
+                          </select>
                         </FormField>
                       )}
+                      {assignmentMode !== "" && printers.isError && <p role="alert">Unable to load printers. Try refreshing the page.</p>}
+                      {assignmentMode !== "" && printers.isSuccess && printers.data.length === 0 && <p>No printers available. Set up a printer first.</p>}
                       {schedulingError && <p role="alert">{schedulingError}</p>}
                       <Button type="button" onClick={() => void handleSaveScheduling(editingJob)}>Save scheduling</Button>
                     </div>

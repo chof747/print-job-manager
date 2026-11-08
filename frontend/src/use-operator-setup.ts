@@ -13,6 +13,7 @@ export function useOperatorSetup(apiBaseUrl: string) {
   const printer = useMutation({
     mutationFn: ({ printerId, capabilities }: { printerId: string; capabilities: PrinterCapabilitiesRequest }) =>
       client.default.putPrinterApiV1PrintersPrinterIdPut({ printerId, requestBody: capabilities }),
+    onSuccess: () => { void queryClient.invalidateQueries({ queryKey: ["printers", apiBaseUrl] }); },
   }, queryClient);
   const material = useMutation({
     mutationFn: (requestBody: MaterialInventoryRequest) =>

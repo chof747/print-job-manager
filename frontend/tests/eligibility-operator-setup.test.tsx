@@ -19,6 +19,7 @@ it("sets up printer and material facts before checking job eligibility", async (
     ok: status >= 200 && status < 300, status,
     headers: { get: () => "application/json" }, json: async () => body,
   });
+  let printerSaved = false;
   const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
     const url = String(input);
     if (url === "/runtime-config.json") return json({ apiBaseUrl: base });
@@ -27,7 +28,11 @@ it("sets up printer and material facts before checking job eligibility", async (
     if (url === `${base}/queue`) return json({ jobs: [job] });
     if (url === `${base}/cockpit`) return json({ activeJobs: [job], failures: [], recentHistory: [] });
     if (url === `${base}/jobs/job-1`) return json(job);
-    if (url === `${base}/printers/printer-1` && init?.method === "PUT") return json({ id: "printer-1", enclosure: true });
+    if (url === `${base}/printers`) return json(printerSaved ? ["printer-1"] : []);
+    if (url === `${base}/printers/printer-1` && init?.method === "PUT") {
+      printerSaved = true;
+      return json({ id: "printer-1", enclosure: true });
+    }
     if (url === `${base}/inventory/materials` && init?.method === "POST") return json({ id: 1, materialType: "PLA", color: "black", amountGrams: 100 }, 201);
     if (url === `${base}/jobs/job-1/eligibility` && init?.method === "POST") return json({ eligible: true, blocked: false, failures: [], satisfied: [{ code: "material_satisfied" }] });
     throw new Error(`Unexpected fetch: ${url}`);
@@ -55,7 +60,8 @@ it("sets up printer and material facts before checking job eligibility", async (
   const active = await screen.findByRole("region", { name: /active/i });
   fireEvent.click(within(active).getByRole("button", { name: /details/i }));
   const details = await screen.findByRole("region", { name: /job details/i });
+  await within(details).findByRole("option", { name: "printer-1" });
   fireEvent.change(within(details).getByLabelText(/printer id/i), { target: { value: "printer-1" } });
   fireEvent.click(within(details).getByRole("button", { name: /check eligibility/i }));
-  expect(await within(details).findByText(/eligible/i)).toBeVisible();
+  expect(await screen.findByRole("dialog", { name: "Job eligible" })).toBeVisible();
 });
